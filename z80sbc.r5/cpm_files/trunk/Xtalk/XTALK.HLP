@@ -1,0 +1,770 @@
+                                  XTALK.HLP
+                          CROSSTALK-CP/M Help file
+                          (C) 1983, Microstuf, Inc.
+                             All rights reserved
+
+This help file is provided for the use of licensed CROSSTALK users only.   Any 
+other use is a violation of United States copyright law.  No part of this file 
+may  be  reproduced  for any reason without the  express  written  consent  of 
+Microstuf, Inc.
+
+                           Revision 3.0  3-17-83 LAF
+                           Revision 3.02 4-04-83 LAF
+		           Revision 3.4 11-18-83 LAF
+                           Revision 3.0  7-13-84 MAW for CP/M vsn.
+
+
+~B AB
+
+This  command is only appropriate when used in a script file.  See your manual 
+for details.
+
+~End
+
+
+
+~B AC
+
+The   ACcept   command   allows you to set the type of access a  caller   has  
+when  calling  into an answering CROSSTALK system.   By  setting  the  access 
+level,   you  can   protect  your system from unauthorized  tampering.    The  
+options  to  the ACcept command are:
+
+Option    Action
+--------  -------------------------------------------------------
+Nothing - Prohibit caller  from writing to any files 
+Appends - Allows    caller    to   append  captured  data  to   an    existing
+          file, but not to create  any new files.  
+Creates - Allows    caller   to  append  data  to  or  create    new    files,
+          but  not to overwrite existing files.
+Everything  - Allows caller full access to system.  
+~End
+
+~B AN
+
+     The  ANsback  command  tells  CROSSTALK whether  or  not  to respond   to
+a received ^E character.    Many  computer   networks  utilize   this  feature
+as  a  means  of identifying  a  caller.   Answering CROSSTALK and TRANSPORTER
+systems utilize the feature to request  your password.    If ANsback is ON,  a
+received  ^E  will cause  the contents of your F4 key (see FK command) to   be
+sent.   If ANsback is  OFF, the ^E will be ignored.
+~End
+
+~B AT
+
+     The    ATTENTION  command   selects   the  key  to  be  used  for    the  ä"ATTENTION"   key.    The  attention  key is the key used  to   display   the  
+"Command?"   prompt when you are in  terminal  mode.      Note  that this key 
+can  not be sent  to   the remote computer,     since  typing it  causes  the 
+program  to  immediately  enter the  command  mode.     The  default key used 
+for attention is a CONTROL-A (^A).   If  the  system you are calling requires 
+you  to   send a CONTROL-A,  you  will have  to  select another key  for  the  
+attention key. 
+
+Note   that  CROSSTALK  will not allow you to set the  ATTENTION,  BREAK  and 
+SWITCH  keys to the same key setting.
+~End
+
+~B BK
+
+     The   BKSIZE   command    sets   the   size  of   the   data   block (in 
+256     byte   increments)   sent   during    protocol  transfers.    It   is  
+normally   set  to 1.     If  you  are  "direct connecting"   two   computers 
+together without modems,     you  may wish  to  select   a  larger block size 
+(up  to  16).      Using    a  larger   block   size  marginally   speeds  up  
+protocol    transfers.     We   recommend   the  default setting  of  1  when  
+transferring  files via modems.
+~End
+
+~B BL
+
+     The  BLANKEX command tells CROSSTALK how to  handle  "blank" lines  when  
+sending  files  to another computer  with  the  SEnd command.     If  BLankex 
+is  ON,   CROSSTALK  will convert blank lines into  lines consisting  of  one 
+space.     This  may  be  useful  when sending  prepared   text    containing  
+empty   lines   into  a  host computer system which assumes a blank  line  to 
+mean "end of text".  
+~End
+
+~B BR
+
+     The   BReak  command is used to select the key to be used for sending  a  
+BREAK.  The BReak   key is normally assigned to be a CONTROL-B (^B),  but may 
+be changed  if desired.   
+~End
+
+~B BY
+
+     The  BYe command hangs up the phone line,    and disconnects the current  
+call.  Use  this  command  when you wish to hang  up and  make  another  call  
+without exiting CROSSTALK.
+~End
+
+~B CA
+
+     The  CApture  command has two  main  modes:      Capture-to-disk,    and 
+capture-to-memory.    To capture directly to disk,    enter "CA  (filename)".  
+If the file already exists,  CROSSTALK will ask if you wish to over-write the 
+file,  or append the new data to the end of the old file.  The command "CA -" 
+is used to to end capture-to-disk, and closes the capture file.
+ä     To  capture  data  to  memory,      enter  "CA  +".      Capture-to-disk  
+automatically stores the captured  data   to the  specified  disk file,   but 
+capture-to-memory  requires  that  you   use   the WRITE command to save  the  
+data  before   exiting  CROSSTALK.   While   capturing data,     the  command  
+"CA  /"   will toggle  capture  on and  off,  allowing   you  to  selectively  
+save incoming data.   The command "CA -"  turns capture OFF.   
+
+     If   you  wish to capture some data which is already  on   your  screen,
+and   capture  is OFF,    you may use the  "RETRO-CAPTURE"  feature.    Enter 
+"CA  <xx",  where  xx is the  number  of  lines you wish to "grab"  off   the  
+screen.     CROSSTALK  will retroactively  capture  the data,   add it to the 
+capture    buffer,    and  leave CApture ON.   RETRO-CAPTURE my only be  used 
+when CApture is OFF.
+~End
+
+~B CALL
+
+To make a call, follow these steps:
+
+     1. Enter the phone number with the NUMBER command.
+     2. Select a modem speed with the SPEED command
+     3. Enter "GO", or press ENTER at the "Command ?" prompt.
+     4. When you are connected, CROSSTALK will let you know.
+     5. To disconnect, press ESC, then enter "BYE" at the "Command ?" prompt.
+
+~END
+
+~B CO
+
+     The   COMMAND command  sets  the  COmmand key.     The COmmand character  
+is    the    key  a  caller   would  type   if  he   had  called   into  your 
+system  and  wanted   to enter   commands    to  CROSSTALK.      We recommend 
+that you leave this key  set to  the default setting of ^C.
+~End
+
+~B CS
+
+     The   CStat  command has two functions.    The  command   "CStat"  alone  
+displays the status of the capture buffer  - how many characters (in K)  have
+been captured, and how much space is still available for capturing.
+
+     The command "CS fred" will search the capture buffer for all  occurances 
+of  the text "fred".    If the word "fred" is located in the capture  buffer,  
+the  program will display the contents of the capture  buffer surrounding the 
+located  word.    After   displaying the  word,   the program will  offer  to 
+continue searching  through the buffer.
+
+     NotÂ thaÙ C” ma˘ bÂ use‰ witË eitheÚ metho‰ oÊ capturÂ active¨† buÙ thaÙ 
+thÂ† searcË† wilÏ onl˘ takÂ placÂ oÓ whaÙ iÛ currentl˘ iÓ memor˘ iÊ† yoı† arÂ 
+using the capture to disk mode of capture.
+
+~END
+
+~B CW
+ä     The  CWait  command  tells  CROSSTALK how  to  wait  between  characters  
+when  transmitting files with the SEnd command.     Use this command when you 
+are  sending  text  to a computer system which can not accept  text  at  full 
+speed.
+
+     The  CWAIT command has several  options.   The  chart  below illustrates 
+the effect of each:
+
+Option    Effect
+NONE      Do not  wait at all   
+Echo      Wait for each character to be echoed by the host before 
+          sending the next character 
+Delay  XX Delay  xx  1/100 of a second,   then  send  the  next 
+          character.
+
+     Note  that  CWAIT can be used in combination with  LWAIT  to allow   you  
+to  transmit text to virtually any  dial-up  computer system.
+~End
+
+~B DA
+
+The DATA command is used to select the number of data bits used by CROSSTALK.  
+The  default value  is   8.   CROSSTALK automatically   switches to  8   bits
+whenever  a  protocol  transfer  is   performed,      even  if  7  bits   had 
+previously  been  selected.  Most dial-up computer systems require   7   data 
+bits.
+~End
+
+~B DE
+
+     The     DEbug    command  allows you to select one  of   three   "debug"  
+modes.    The  debug  modes  allow you to display incoming control-characters  
+graphically  on your screen.   This  is  often useful   when   attempting  to  
+identify    non-printing    control characters transmitted  by  some  dial-up 
+computer systems.
+
+     The chart below shows how each of the debug modes operates:
+
+Mode      Action
+NONE      Incoming control characters are not altered.
+
+HEX       All   incoming   characters  are  shown  as  hex    numbers.    For
+          example, an incoming ^Z will be shown as [1A].
+
+CHAR      Incoming  control-characters are shown in the form  ^X.  
+~ENd
+
+~B DI
+
+     The   DIr command is used to view the disk  directory,    much like  the 
+CP/M "DIR" command.    Like the CP/M DIR command, you may provide an optional 
+file name,   and the program will display only those  files given in the file 
+name.   For example,  the  command "DIR *.ASM" will show only the .ASM files.
+
+     There    are  two options to the DIr command  which  are  not found   in äthe CP/M DIR command.  These are the /S and /T options.  The command "DIR /S" 
+will show  the size of each file,   and "DIR /T" will show the amount of time 
+required to send each file,   at the current speed.   
+
+~END
+
+~B DO
+
+The DO command instructs CROSSTALK to perform the commands contained  in    a 
+"script"    file.    Script   files   are    files  containing  commands  for 
+CROSSTALK to perform.  There  are three forms of the DO command.    The table  
+below shows how each works.
+
+Command        Action:
+DO             When   no   other  script  file  is  active,    this   command
+               will   display   a  menu  of  the  available   script   files,
+               and   then  ask  you  to  choose  one.     The  chosen    file
+               will then be performed.
+
+DO             If    a   script   file  has  been  suspended  by    a    WAIT
+               MANUAL    command,    entering    "DO"   will    resume    the
+               script file processing.
+
+DO BERT        Performs the script file "BERT.XTS".
+
+You  may  create a script file with any text editor,  such as the ED  program 
+which is included with CP/M.   Script files must have the file name extension 
+".XTS".   The  script  files  may contain any list of commands  you  wish  for 
+CROSSTALK to do.  The commands "REply" and "WAit" are especially useful.
+~END
+
+
+~B DP
+
+     The  DPREFIX command tells CROSSTALK how to dial your modem.   When  you 
+instruct  CROSSTALK  to dial,  the program sends the following  data  to  the 
+modem:
+
+       DPREFIX string  | NUMBER string  |  DSUFFIX string
+
+     By changing the DPREFIX string, CROSSTALK can dial a number of different 
+types  of auto-dial modems.   There are several characters which have special 
+meaning when placed in a DPREFIX string.  These are:
+
+Character      Effect
+   |           Places a carriage return (ENTER key) in the string.
+   ~           Causes CROSSTALK to delay one second when dialing.
+   ^           The  character following the ^ character is sent as a  control 
+               character.   For example, "^T" would place the ^T character in 
+               the dial prefix.
+~END
+
+
+~B DR
+ä     The DRive command has two functions.  Entering "DRive" alone will simply
+"log in" the current disk.  This is necessary if you change  diskettes  while
+in CROSSTALK.  Entering "DR" followed by a drive name ("DR B:") will both log
+in the diskettes, and change your "default" drive to the specified drive.
+
+     WheÓ† "DRive¢ iÛ issue‰ froÌ terminaÏ mode¨† thÂ disketteÛ wilÏ† bÂ† re-
+logged and the amount of space on the current disk will be displayed.
+
+     Note that CROSSTALK can not tell which drives actually have diskettes in 
+them.  If  you  try  to set your default drive to a non-existent drive, or if 
+there  is  no  diskette  in the selected drive, CP/M will give you a "SELECT" 
+or "BDOS" error,  and CROSSTALK will most likely leave you in CP/M,  with  no 
+way to recover any captured data.
+~END
+
+~B DS
+
+     The DSUFFIX command sets the dialing suffix string.  (see explanation of 
+the DPREFIX command).   The same special characters apply to DSUFFIX as apply 
+to DPREFIX.
+~END
+
+~B DU
+
+     The  DUplex command  sets duplex to full (local echo OFF) or half (local
+echo ON).    Most  dial-up computer systems  require that your system be  set
+for  FULL duplex.
+
+Note that when you select ANSWER mode,  CROSSTALK selects HALF duplex.   When 
+you select CALL mode,   the program automatically selects FULL duplex.    See 
+the glossary for an explanation  of "duplex".
+~END
+
+~B ER
+
+     The   ERase   command has two functions:   The command  "ER" alone  will  
+erase   the contents  of the  capture  buffer.     The command "ER  FILE.NAM" 
+will erase  the file   "FILE.NAM".    You  are   always  asked to confirm  an  
+erase  before  the  operation  actually  takes place, unless you use the "/Y" 
+option in CROSSTALK (i.e.- "er file.nam /y").  Be careful when using /Y after 
+an  ER command,  as  there is  no  way  to  recover  the erased  information.  
+The  command  "ER *.*" will allow  you  to selectively erase any or all files 
+on a disk. 
+
+     Note  that  an  answer-mode caller may only  use  the  ERASE command  to 
+erase  the contents of the capture buffer.    He may NOT erase files from the 
+disk.
+~END
+
+~B FI
+
+	The   FIlter  command is used to select  which  characters  CROSSTALK  
+will  discard  when  the INfilter option is used.    Enter "FI"   and   press 
+ENTER, and CROSSTALK will show you a list of "PASSED" and "FILTERED"  control
+characters.  You may change the list as  desired for  your application.  Note äthat  the  FIlter settings are  saved when a command file is saved  with  the 
+SAVE command.
+~END
+
+
+
+~B FK
+     The    FKeys   command  is  used  to  set  and  display   the   contents 
+of  the  programmable  function  keys.     The  command "FK"  will  show  the 
+settings  of the function keys.
+
+     To set a function key, enter "FK n string", where n is the number of the 
+key  to  be  set,   and  "string" is the string of text assigned to that key.
+Several  characters  have  special  meaning  when used in function keys.  The  
+vertical bar (|) places a carriage return in the string. The tilde (~) causes
+a one second delay.  Any key which begins with an at-sign  (@)  will be taken
+as a command  to CROSSTALK.  
+
+     FoÚ Example¨ thÂ comman‰ "FÀ ± @P“  /|¢ wilÏ seÙ ke˘ ± tÔ "@P“ /|"Æ WheÓ 
+ke˘ ± iÛ pressed¨  CROSSTALÀ wilÏ togglÂ thÂ printeÚ oÓ oÚ off.
+~END
+
+~B GENERAL
+
+If  you  wish to make a call,  enter "HELP CALL".   If you wish to  exit  from 
+CROSSTALK,  enter  "QUIT".   For  help  on any  specific  topic,  enter  "HELP 
+(topic)".  
+~END
+
+
+~B GO
+
+     The  function  of the GO command depends on which  mode  the program  is
+in.   In  CALL mode,  The  GO  command tells CROSSTALK to  dial  a number and
+establish  a   connection.  You   may  instruct  the   program   to   re-dial
+automatically  if  a  connection  is   not established   on the   first  try.
+The  command "GO R30"  would tell  CROSSTALK   to re-dial every  30   seconds 
+until a  connection is established.  Similarly, the command "GO R30/60" would 
+instruct  CROSSTALK to re-dial every 30 seconds while waiting 60 seconds each 
+time it dialed for connection.
+
+     The   command   "GO  LOCAL" tells CROSSTALK that  there   is   no  modem  
+connected   to  the system.     Use  this option  when  using  CROSSTALK   to 
+transfer  files between  two computers  "hard-wired" together.      When  the 
+local option is used,   the carrier detect  signal  on  the RS-232  interface 
+is ignored.
+
+     IN  ANSWER  mode,  the GO command tells CROSSTALK  to  begin waiting for 
+incoming calls.
+~END
+
+~B HE
+
+     The   HELP  command  provides  help  on  all  of  CROSSTALK's  commands. 
+Entering   "HElp"  with   no option displays a  list of  all  of  CROSSTALK's äcommands.   If you need help with  a  command,  type  "HELP  XX" <CR>,  where 
+"XX"  is  the  command you  need  help  with.     If  CROSSTALK  asks  you  a 
+question you don't  understand,   enter  a "?", and the help for that command 
+will be displayed.
+~END
+
+~B IN
+     The  INfilter  command  tells  CROSSTALK  to  discard  incoming  control 
+characters  when  in terminal mode.    Some host  computer systems  may  send 
+control-characters which are meaningless to your computer.  Turning  INfilter  
+ON  will discard these characters.  If your see extraneous "junk"  characters  
+on the terminal screen,  try turning INfilter ON. INfilter also "strips"  the  
+top  bit off of 8-bit characters.  With INFILTER OFF,  these characters   may  
+appear   as  "graphics"   characters.  Turning INFILTER ON will display these 
+characters correctly.
+~END
+
+~B KE
+
+     ThÂ† KE˘† comman‰† iÛ† use‰ tÔ selecÙ thÂ ke˘ tÔ bÂ† use‰† tÔ† "trip¢† · ç
+functioÓ† keyÆ†  ThÂ defaulÙ foÚ KE˘ iÛ ^K¨† buÙ ma˘ bÂ an˘ non-printinÁ keyÆ  ç
+TÔ† sen‰† ·† functioÓ key¨† typÂ thÂ currenÙ KEy¨† followe‰ b˘† 0-π† foÚ† thÂ ç
+functioÓ keyÛ 0-π oÚ C,P¨† oÚ ‘ tÔ togglÂ capturÂ on/off¨† thÂ printeÚ on/ofÊ ç
+oÚ tÔ TYpÂ thÂ capturÂ buffeÚ contents¨ respectivelyÆ  WheÓ iÓ terminaÏ mode¨ ç
+thÂ currentl˘ define‰ KE˘ ke˘ ma˘ bÂ senÙ b˘ pressinÁ iÙ twiceÆ  
+
+~END
+
+~B LF
+
+     When  LFauto  is on,    CROSSTALK will print a line feed on  the  screen  
+after    each  received   carriage   return.      This    is   useful    when  
+communicating  with systems which do not send line feeds.
+
+     Conversely,   when   LFAUTO  is ON,   CROSSTALK  will  print  a carriage  
+return   each   time  a  line feed is   received.    This   is  useful   when  
+communicating with systems which  send  line  feeds without carriage returns.
+~END
+
+~B LI
+
+     The  LIST  command  is  used  to display CROSSTALK's parameter  settings
+to  a calling system when your CROSSTALK is in answer mode.  This command has
+no effect when issued locally, and will not generate an error.
+~END
+
+~B LO
+     The   LOad command is used to load CROSSTALK  command  files.    Command 
+files   are files  containing  commands  for CROSSTALK   to  perform.     The 
+command   "LO"   will  display  all of the available  command   files,    and  
+allow  you to choose  one  to  load.     The command "LO  FRED" will load  in 
+"FRED.XTK",  and perform  all  of  the  commands  contained in that file.    
+~END
+
+~B LWä
+     The   LWait  command  tells CROSSTALK how to  wait  between  lines  when 
+transmitting text  files with the SEnd command.     There are several options 
+to the LWAIT command.   The table below shows how each option works:
+
+Option         Effect
+NONE           Each line is sent with no waiting.
+Prompt X       Send    a   line   of  text,    wait  for  a   prompt   of   X
+               characters, then send the next line.
+Char "X"       Send   a  line  of  text,    wait  until  the  character   "X"
+               is received, then send the next line.
+Delay X        Wait X tenths of seconds between lines.
+Manual         Prompts    the    user    to  press    space    bar    between
+               each line.
+Echo           Wait    until   a  carriage  return  is  echoed    from    the
+               host system.
+Learn          Send    the    first   line   of    text,    count    incoming
+               characters,  wait until the user presses the space bar,   then 
+               send  each  successive  line  with a  wait  for  a  prompt  of  
+               "count"  characters.
+
+~END
+
+~B MO
+
+     The   MOde   command tells your CROSSTALK program  whether  to  Make  or 
+Answer  calls.   If  you wish to MAKE a  call,   select  "CALL"  mode.     To
+ANSWER  calls,    use  "ANSWER"   mode.     CROSSTALK  automatically  selects 
+HALF Duplex (see DUplex command)  when the  answer  mode  is  selected,   and 
+selects FULL duplex when   call  mode  is selected.
+~END
+
+~B NA
+
+     The    NAme   command   is used to set the name of  a  called  location.
+Use   of  this command    is  optional.     If a NAme has   been   given   to 
+CROSSTALK,    the name will  be  sent  as  a "greeting"  message  whenever  a  
+remote  terminal    calls  into CROSSTALK in the answer mode.
+~END
+
+~B NO
+
+     This   command  is  used  internally  between  two   CROSSTALK  systems.
+It   is  sent  from an answer system to a call system  at the end of  a  file 
+transfer,  to  tell  the calling system that there are no more  files  to  be 
+transmitted.
+
+This command is not normally entered as a command by the user.
+~END
+
+~B NU
+
+     The    NUmber   command   sets the phone number to   be   dialed.    The 
+number may be up to 35 characters long.  
+~ENDä
+~B OU
+
+     The  OUtfilter   command   instructs  CROSSTALK to   screen   out   line
+feed  when sending text files with the SEnd command.     If OUtfilter is  ON, 
+line feeds characters are discarded. 
+~END
+
+~B PA
+
+     The     PArity    command  is  used  to  set  the  parity  bit  to   the  
+appropriate   value.   Some  systems  require  that parity be  set correctly,
+other   systems   ignore  parity  entirely.     The possible settings for the 
+PARITY command are None, Even, and Odd.
+~END
+
+~B PR
+     The   PRinter  command  tells  CROSSTALK  to  echo  all  data  displayed  
+on   the  terminal screen   to  the  printer.    Turning PRinter  ON does not 
+turn the  terminal  video display off.    The command  "PR /" will toggle the 
+printer to the opposite state  of what  it  currently  is.   
+
+     NotÂ† thaÙ trip-ke˘ – wilÏ alsÔ togglÂ thÂ statÂ oÊ thÂ printeÚ froÌ† oÓ ç
+to off and off to on.
+
+~END
+
+~B PW
+     The    PWord  command  is  used  to  set  CROSSTALK's  answer  password.
+The   password may  be  up  to 12  characters  long.    If  you  have set   a  
+password,    then  any persons calling  into your  system will be required to 
+enter the password  before  they  can   access your system.     Setting PWord 
+to blank disables  the  password feature.
+~END
+
+~B QU
+
+     The     QUit     command   tells  CROSSTALK  to   immediately disconnect  
+and   return   to  DOS.    If any  information is in   the  capture   buffer,
+CROSSTALK  will ask if you wish  to  save  the information before exiting. 
+~END
+
+~B RC
+
+     This  command is used internally by CROSSTALK,   during  file transfers. 
+It is not normally entered as a command by the user.  
+~END
+
+~B RD
+
+     ThÂ† RDiaÏ comman‰ iÛ use‰ tÔ telÏ CROSSTALÀ ho˜ man˘ timeÛ tÔ rediaÏ† · 
+number before giving up.  RDials may be in the range 0-65535.
+
+~END
+ä~B RE
+
+     The    REply   command  sends a string of text  to  the    modem.    The  
+command   "RE Hello."  would  send  the  text "Hello." to the   modem.     To  
+send  a  control character,  enter the character in the form "^X".    To send 
+a  carriage  return,  use the vertical bar "|".      The  REply   command  is 
+normally used only  inside  of  a  CROSSTALK   "script"  file.   Script files 
+are  a  special  type   of  file  which contains commands  for  CROSSTALK  to 
+perform.   See chapter 12 for more information on the REply command.
+~END
+
+~B RQ
+
+     The    RQuest    command  is used to request  a   transfer    of   files  
+from  another CROSSTALK  system.  This command should only be  issued  from a 
+CALL mode system when calling into  an  ANSWER mode system.
+ 
+     You  may  specify  an  optional target or destination  drive  name  when 
+issuing the RQUEST command.  Some examples of this are shown below:
+
+Command        Result
+RQ *.asm       Request all files with the type .ASM
+
+RQ  B:FRED     Request  the  file FRED from drive B:,  place  the file on the 
+               default drive.
+
+RQ  B:BERT C:  Request   the  file BERT from drive B:,   place  the  file  on 
+               drive C:.
+
+~END
+
+~B RX
+	The  RXMODEM command is used to receive files from  another  computer  
+system using the XMODEM protocol.    To transfer a  file from  another system 
+to yours,   first tell the other computer  to send  you  a  file,  then press 
+the attention key and  enter  the command "RX (filename)"
+~END
+
+~B SA
+
+     The    SAve    command  saves  a CROSSTALK  command  file   for   future  
+use.   All  of CROSSTALK's operating parameters,  including all function  key 
+definitions,  are saved in the command file.  
+~END
+
+~B SC
+
+     The  SCreen  command  may  be  used  to switch screens under control of a 
+script  file.   The options are "SCreen S" to switch to the status screen, and 
+"SCreen T" to switch to the terminal screen.
+~End
+
+~B SE
+
+     Use   the   SEnd command to send a text file from your disk  to  another  äcomputer system.    This command is most often used  when communicating  with  
+another  computer which  is   not    running CROSSTALK.     If the system you 
+are communicating with is running CROSSTALK,  use the "XMit" command instead.  
+
+     Several   other   commands  are  used to modify the   method   the  SEND 
+command  uses  to  send files.    For information on  all  of   the  commands  
+affecting  the  operation  of the SEnd command,    see   the   LWait,  CWait, 
+BLankex, and OUtfilter commands.
+~END
+
+~B SP
+
+     The  SPeed  command   selects   the  speed  at  which   your    computer
+will   communicate  over the phone  line.      Only  the first digit of   the 
+desired speed need must be entered. Note that 1200 baud is 1, 110 baud is 0.
+~END
+
+~B ST
+
+     The   STop command sets the number of stop bits used to make up the data  
+word.   Most systems use 1 stop bit at speeds of  300 baud,  and above, and 2 
+stop bits at 110 baud.
+~END
+
+~B SW
+
+     The   SWitch   command   selects   the key to  be  used  for   switching  
+between the terminal and status screens.     This key is  normally the ESCAPE
+key, but can be changed to another key if desired.
+
+~END
+
+~B TA
+
+     The   TAbex  command is used to turn tab expansion on  and  off.    When 
+TAbex    is  on,    transmitted tab characters are  sent  as spaces  to   the 
+next  tab  position.   This  is useful when  sending files  to systems  which  
+do  not interpret tabs. 
+
+     Note  that the TABEX command only affects the SEND  command.   It has no 
+effect on normal "terminal mode" operation.
+~END
+
+~B TS
+
+     ThÂ† TStatuÛ† comman‰† iÛ use‰ tÔ turÓ on/ofÊ thÂ statuÛ† linÂ† wheÓ† iÓ 
+terminaÏ† modeÆ†  NotÂ thaÙ usinÁ thÂ statuÛ linÂ oÓ somÂ computerÛ ma˘ causÂ 
+loss of characters.  If this is the case, leave TStatus off.
+~END
+
+~B TU
+
+     Some   computer   systems use a key other than ENTER  to  mean "end   of  
+line".    The  TURNAROUND command tells  CROSSTALK  which character  to  send 
+when the ENTER key is pressed.  ä~END
+
+~B TY
+
+     The  TYPE  command  has  two functions:  It may be used  to  review  the 
+contents of the capture buffer,  or it may be used to view the contents of  a 
+disk file.
+
+     When    given  with no name,    the TYpe  command   types  the  contents  
+of   the capture buffer  to  the screen.     The  command "TYpe   (filename)"  
+will  type the contents of the  file  on  the screen.    
+
+     NotÂ thaÙ yoı ma˘ TYpÂ thÂ capturÂ buffeÚ witË thÂ capturÂ tÔ disÎ† modÂ ç
+active, but that only the data in the buffer will be displayed.
+
+~END
+
+~B UC
+
+     The  Uconly  command is used to set upper case mode  on  and off.   When  
+UConly is on,    all  lower case letters encountered during  a  SEnd  will be 
+converted   to  upper  case.    Received characters are  unaffected.  
+
+~END
+
+~B US
+
+     ThÂ† USeÚ† comman‰† iÛ provide‰ foÚ peoplÂ whÔ nee‰† tÔ† switcË† betweeÓ 
+userÛ† wheÓ† iÓ CROSSTALKÆ†  USeÚ witË nÔ argumenÙ wilÏ displa˘† thÂ† currenÙ 
+userÆ†  IssuinÁ† "USeÚ 5¢ wilÏ seÙ CROSSTALÀ tÔ useÚ 5Æ†  NotÂ thaÙ yoı† wilÏ 
+always be returned to the drive and user from which you invoked CROSSTALK.
+
+~END
+
+~¬ WA
+
+     The     WAit   command   tells  CROSSTALK to wait  between   lines  when  
+performing  a script file.   The options available with the WAIT command are:
+
+Condition      Effect
+Echo           Wait  for  a carriage return,   then do the next line  in  the 
+               script file.
+Quiet X        Wait     until    the   line   is    "quiet"     (i.e.,     no
+               characters  received)  for X tenths of  a  second, then do the 
+               next line in the script file.
+Delay X        Wait for a period of X tenths of a second, then do 
+               the next line.
+Char 'x'       Wait    until   the  character  "x"  is  received   from   the 
+               communications line, then send the next line.
+For 'x'        Same as "char 'x'", above. 
+Prompt X       Wait  for  X characters  from  the  communications line,  then 
+               do the next line in the file.
+String 'xyz..' Wait for the specified string from  the  communications  line. 
+               Note that spaces and character case are ignored.
+Manual         Suspend script processing until a "DO" command  is issued.ä
+~END
+
+~B WH
+
+     ThÂ† WHeÓ† comman‰† iÛ use‰ tÔ telÏ CROSSTALÀ tÔ† perforÌ† ·† command(s© ç
+WHeneveÚ† · certaiÓ strinÁ comeÛ iÓ froÌ thÂ modemÆ†  ThÂ synta¯ oÊ thÂ† WHeÓ ç
+command is:
+                    WHEN "string" command : command : ...
+
+NotÂ thaÙ thÂ quoteÛ aroun‰ thÂ strinÁ arÂ required¨† an‰ thaÙ morÂ thaÓ† onÂ ç
+comman‰† caÓ† bÂ execute‰ oÓ thÂ WHeÓ conditionÆ†  SeÂ thÂ manuaÏ foÚ ·† morÂ ç
+detailed description of the WHEN command.
+
+~END
+
+~B WR
+
+     The   WRite command stores  captured data into a file of  your   choice.  
+If     a disk  error occurs,   or if the capture buffer is  empty,  an  error 
+message will be printed.   
+
+     Use   the  WRITE   command  when you have  captured   data   using   the 
+capture-to-memory  command,  and you wish to save the captured data on   your 
+disk.    It  is  not  necessary to use the WRITE command  if  you  are  using 
+capture-to-disk.
+
+~END
+
+~B XC
+
+     The  XCPM  command  tells CROSSTALK to exit to CP/M  without  hanging up 
+the  phone  line.     You may run any other program and return  to CROSSTALK, 
+and  your  connection will still be intact.    If any information is  in  the 
+capture buffer, CROSSTALK will ask if you wish to save the information before 
+exiting. 
+~END
+
+~B XM
+
+     The   XMit   command  transmits  files  to  another   CROSSTALK  system.  
+"Wildcard"  file names are allowed.     An optional target drive  name may be 
+given after the file name.   
+
+     Note   that  the XMIT command should only be used when calling  into  an 
+answer-mode CROSSTALK or TRANSPORTER system.
+
+     The chart below shows some example XMIT command:
+
+Command             Action
+XMIT *.ASM          Sends   all the files with  the type  .ASM  to the  other 
+                    system.
+
+XMIT BERT           Send   the file BERT from the default drive to the  other 
+                    system.ä
+XMIT B:FRED C:      Send the file B:FRED to drive C: on the other system.
+
+~END
+
+~B XX
+
+	The  XXMODEM  command is used to send a  file  from  your computer to 
+another  system  using  the  XMODEM protocol.    To send a  file   from  your 
+computer  to another system running XMODEM,   first tell the other system  to 
+prepeare  to receive a file,   then  press the ATTENTION key,  and enter  the 
+command: "XX (filename)"
+~END
+

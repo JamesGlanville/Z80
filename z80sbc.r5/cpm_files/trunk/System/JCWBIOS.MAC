@@ -1,0 +1,1453 @@
+;
+;
+;
+
+	.8080
+jpopcod	equ	(jmp)		; jp op-code
+jpzopcd	equ	(jz)		; jp z op-code
+
+	.Z80			; mnemonics only, runs on 8080 as well
+
+	maclib	MEMCFG.LIB	; define msize, bioslen and nhdisks
+
+ccplen	equ	0800h		; CP/M constant
+bdoslen	equ	0e00h		; CP/M constant
+
+;
+;  Decimal representation of CP/M image size (rounded up to next 1k boundary)
+;
+cpmlen	equ	(ccplen + bdoslen + bioslen + 03ffh) / 0400h
+
+ccp	equ	(msize - cpmlen) * 1024		; ccp start address
+bdos	equ	ccp + ccplen + 6		; bdos start address
+bios	equ	ccp + ccplen + bdoslen		; bios start address
+
+wbotloc	equ	0000h		; warm boot location
+bdosloc	equ	0005h		; BDOS entry location
+bioserr	equ	1		; 1 indicates BIOS error
+cdisk	equ	0004h		; current disk location
+ndisks	equ	3		; total number of 8MB disks
+csecsiz	equ	0080h		; sector size CP/M
+
+;
+;
+;
+sectors	equ	(ccplen+bdoslen)/csecsiz ; (== 44)
+
+;
+;  Address of the SIO/2 ports
+;
+constat	equ	19h		; SIO port 1 status port
+condata	equ	18h		; SIO port 1 data port
+punstat	equ	1bh		; SIO port 2 status port
+pundata	equ	1ah		; SIO port 2 data port
+
+;
+;  Constants for the IDE port
+;  
+;  IDE port works thusly:  Data bits are managed with the PIO.  PIO-A goes to
+;  the low data bits of the IDE controller, PIO-B goes to the high.  The /xSTB
+;  line of the PIO is tied to /RD.  To read an IDE controller register, a dummy
+;  IN is performed to 0x20..0x27 or 0x30..0x37, which map to the 0x1f0..0x1f7 
+;  and 0x3f0..0x3f7 I/O addresses in a PC.  When /RD goes high, the data the 
+;  IDE controller has presented gets latched by the PIO, which is then read 
+;  from the PIO data register.  Prior to issuing the read to the IDE controller,
+;  the DDR for both PIO-A and PIO-B should be set to inputs.
+;
+;  To write to the IDE register, PIO-A and PIO-B are set up for output.  The
+;  data to be written to the IDE is placed in the PIO data registers (low
+;  only for everything except actual data, high and low for data), then an OUT
+;  to one of the IDE addresses is performed to latch the data to the IDE 
+;  controller.  The data for the OUT instruction is irrelevant, since only the
+;  address is of interest.
+;
+;  It is recommended to leave the PIO in input mode whenever not actually
+;  writing.  This will prevent a driver conflict should a read be performed
+;  to the IDE controller.
+;
+;  For our purposes, HD volumes will always be 8MB, no matter what.  If the
+;  CF card is a 30MB card (most 32MB cards are really 30MB), it just means 
+;  that we can't use the last 6MB, because we don't have a DPB for it, and
+;  no way to make one easily.
+;
+iifDataLow	equ	1ch	; PIO-A data is IDE data low
+iifDataHigh	equ	1eh	; PIO-B data is IDE data high
+iifDDRLow	equ	1dh	; PIO-A control data direction register
+iifDDRHigh	equ	1fh	; PIO-B control data direction register
+;
+ideData		equ	20h	; IDE data port
+ideSectCnt	equ	21h	; IDE sector count register
+ideFeatures	equ	22h	; IDE features register
+ideLBAll	equ	23h	; IDE bits 0..7 of 28 bit LBA
+ideLBAlh	equ	24h	; IDE bits 8..15 of 28 bit LBA
+ideLBAhh	equ	25h	; IDE bits 24..27 of 28 bit LBA
+ideLBAhl	equ	26h	; IDE bits 16..23 of 28 bit LBA
+ideCommand	equ	27h	; IDE command register
+ideErrors	equ	22h	; IDE errors register
+ideStatus	equ	27h	; IDE status register
+ideDeviceCtrl	equ	25h	; IDE device control register
+;
+cmdRead		equ	020h	; Read Sector
+cmdWrite	equ	030h	; Write Sector
+cmdIdent	equ	0ech	; Identify Drive
+cmdFeatures	equ	0efh	; Set Feature
+;
+;  A few macros for managing the IDE
+;
+DEBUGOUT	macro	?char
+		local	?loop
+		push	af
+?loop:		in	a,(constat)
+		and	004h
+		jp	z,?loop
+		ld	a,?char
+		out	(condata),a
+		pop	af
+		endm
+;
+;  Puts PIO in output mode to talk to IDE controller
+;
+IDEOUT		macro
+		ld	a,00fh
+		out	(iifDDRLow),a
+		out	(iifDDRHigh),a
+		endm
+;
+;  Puts PIO in input mode to listen to IDE controller
+;
+IDEIN		macro	
+		ld	a,04fh
+		out	(iifDDRLow),a
+		out	(iifDDRHigh),a
+		endm
+;
+;  Send a command to the IDE controller
+;
+IDECMD		macro	?cmd
+		IDEOUT
+		ld	a,?cmd
+		out	(iifDataLow),a
+		out	(ideCommand),a
+		IDEIN
+		endm
+;
+;  Return 0 if no error, 1 if controller ERR bit set
+;
+IDESTATUS	macro
+		in	a,(ideStatus)
+		in	a,(iifDataLow)
+		and	001h
+		endm
+
+;
+cr	equ	13		; Carriage Return
+lf	equ	10		; Line Feed
+
+;
+;  Start of ye olde code
+;
+	aseg
+	org	0100h
+	.phase	bios
+
+	jp	boot		; cold start
+wboote:	jp	wboot		; warm start (reboot)
+	jp	const		; console status
+	jp	conin		; console input
+	jp	conout		; console output
+	jp	list		; list character out
+	jp	punch		; punch character out
+	jp	reader		; read character in
+	jp	home		; move disk head to home
+	jp	seldsk		; select disk drive
+	jp	settrk		; set track number
+	jp	setsec		; set sector number
+	jp	setdma		; set disk memory read/write address
+	jp	read		; read sector
+	jp	write		; write sector
+	jp	listst		; list dev status test
+	jp	sectrn		; sector translate
+
+;  
+;  In the Altair ROM, bootdr1 is defined as rom(ff00h)+37h, which apparently
+;  contains the unit number we booted from.  Eventually, we'll support
+;  such a thing, but for now we'll just always say it's 0.  This leaves
+;  all the patches functional, so later additions should be easy.
+;
+bootdr1:db	0
+
+;
+;  The BOOT entry point gets control from the cold start loader and is
+;  responsible for basic system initialization, including sending a sign-on
+;  message, which can be omitted in the first version. If the IOBYTE function
+;  is implemented, it must be set at this point. The various system parameters
+;  that are set by the WBOOT entry point must be initialized, and control is
+;  transferred to the CCP at 3400 + b for further processing. Note that
+;  register C must be set to zero to select drive A.
+;
+boot:	ld	sp,stack	; Local stack
+	ld	a,(bootdr1)	; load current disk with boot drive
+	ld	(cdisk),a
+	ld	de,msg1		; print welcome message
+	call	msg
+;
+entcpm:	ld	a,jpopcod	; jp instruction code
+	ld	(wbotloc),a	; store at entry to warm boot
+	ld	hl,wboote	; get jump location
+	ld	(wbotloc+1),hl	; and store it after jp instruction
+	ld	(bdosloc),a	; jp instruction code for entry to BDOS
+	ld	hl,bdos		; get jump location
+	ld	(bdosloc+1),hl	; and store it after jp instruction
+
+;
+;  Begin patch CCP and BDOS.  Loop through the patch table, applying the patch to 
+;  the specified address.  See patchs: for table format.
+;
+	ld	b,low ((patche-patchs) shr 2)	; number of entries in patch table
+	ld	hl,patchs	; start of patch table
+patch1:	ld	e,(hl)		; <E> is lower byte of address for jp instruction
+	inc	hl		; point to upper byte
+	ld	d,(hl)		; <DE> points to address for jp instruction
+	inc	hl		; <HL> points to lower byte of source jp address
+	ld	a,jpopcod	; jp op code
+	ld	(de),a		; store jp op-code to appropriate location
+	inc	de		; <DE> points to lower byte of destination jp address
+	ld	a,(hl)		; get lower byte of address
+	ld	(de),a		; store it
+	inc	hl		; point to upper byte source jp address
+	inc	de		; point to upper byte destination jp address
+	ld	a,(hl)		; get upper byte of address
+	ld	(de),a		; store it
+	inc	hl		; point to next table pair
+	dec	b		; entry done
+	jp	nz,patch1	; if more to do
+
+;
+;  Patch BDOS to perform a ROM reboot in case of Bad Sector error
+;  is detected and user has typed ^C. This is to make sure that one
+;  can recover from errors due to non-existing drives.
+;
+;  JCW: disabled this, since our ROM is in RAM.  Probably need to implement
+;  a reset strobe in the GAL.  Can't just switch the ROM back in, since we
+;  have no way of controlling where we'll be when the switch happens.
+;
+	if	0
+	ld	hl,rom
+	ld	(bdos+009ch),hl	; at bdos+9bh we now have jp z,rom instead of jp z,0
+	endif
+
+;
+;  Patch CCP to look on IPL drive if file not found
+;
+	ld	a,jpzopcd	; replace jp opcode with jp z opcode
+	ld	(ccp+06dbh),a	; plug into CCP at intercept point
+
+;
+;  Apparently this patch lowercases some messages that BDOS emits so we don't
+;  look like we're running on an ASR-33.  Seems... Unimportant.
+;
+	ld	hl,lctabs
+	ld	c,low ((lctabe-lctabs) / 3)	; number of table entries
+;
+;  Precondition: <HL> points to table with structure (byte length, word address)*
+;  at 'address' starts a character string of length 'length' which is to be translated to
+;  lower case
+;
+tolc:	ld	b,(hl)		; <HL> points to length byte
+	inc	hl		; <HL> points to lower byte of address
+	ld	e,(hl)		; E := lower byte of address
+	inc	hl		; <HL> points to upper byte of address
+	ld	d,(hl)		; D := upper byte of address
+	inc	hl		; <HL> points to next length byte
+	ex	de,hl
+tolc1:	ld	a,(hl)		; get character to be transformed
+	cp	'A'
+	jp	c,tolc2		; next character if less than 'A'
+	cp	'Z'+1
+	jp	nc,tolc2	; next character if greater than 'Z'
+	add	a,'a'-'A'	; to lower case
+	ld	(hl),a		; store back
+tolc2:	inc	hl		; point to next character
+	dec	b		; count down length
+	jp	nz,tolc1	; repeat if necessary
+	ex	de,hl		; <HL> points to next length byte
+	dec	c		; update number of table entries processed
+	jp	nz,tolc		; if not equal to zero, continue
+;
+;  End patch CCP and BDOS
+;
+
+	ld	bc,0080h	; default DMA address
+	call	setdma		; and set it
+	ld	a,(cdisk)	; get current disk
+	ld	c,a		; store in C (to preserve user number)
+	and	00fh		; strip off user number
+	cp	ndisks		; does it exist?
+	jp	c,ent1		; yes, proceed
+	ld	a,(bootdr1)	; get boot drive
+	and	00fh		; should never be > 15, but be sure
+	ld	(cdisk),a	; make it current disk, reset to user 0
+	ld	c,a		; inform CCP
+ent1:	ei
+	jp	ccp
+
+;
+;  The various patches that we apply
+;
+
+;  DD40    3A E3EF               ld	a,(cdisk)
+;  DD43    B7                    or	a
+;  DD44    3E 00                 ld	a,0
+;  DD46    C4 DCBD               call	nz,select
+;  DD49    11 E3AC               ld	de,subfcb
+;DD43:	jp	ccpp1
+ccpp1:	ld	e,a		; <E> := current disk
+	ld	a,(bootdr1)	; <A> := boot drive
+	cp	e		; compare boot drive with current disk
+	jp	ccp+0146h	; a select of boot drive occurs iff current disk <> boot drive
+
+;  DD7D    3A E3EF               ld	a,(cdisk)
+;  DD80    B7                    or	a
+;  DD81    C4 DCBD               call	nz,select
+;  DD84    21 DC08               ld	hl,combuf
+;DD7D:	jp	ccpp2
+ccpp2:	ld	a,(bootdr1)	; <A> := boot drive
+	ld	e,a		; <E> := boot drive
+	ld	a,(ccp+07efh)	; <A> := current disk
+	cp	e		; compare boot drive with current disk
+	jp	ccp+0181h	; a select of current disk occurs iff current disk <> boot drive
+
+;  DDE3    36 00                	ld	(hl),0		;submit flag is set to false
+;  DDE5    AF                   	xor	a
+;  DDE6    CD DCBD              	call	select		;on drive a to erase file
+;  DDE9    11 E3AC              	ld	de,subfcb
+;DDE3:	jp	ccpp3
+ccpp3:	ld	(hl),0		; patched over
+	ld	a,(bootdr1)	; <A> := boot drive
+	jp	ccp+01e6h	; go select boot drive
+
+;
+;  Patch BDOS to change the drive selected by BDOS Function 13 (Reset Disk System).
+;
+f13pat:	ld	a,(bootdr1)	; get boot drive
+	ld	(bdos+033ch),a	; store into curdsk (BDOS)
+	jp	bdos+0c8ah
+
+;
+;  Patch CCP to look on IPL drive if file not found
+;
+ccpat:	ld	hl,ccp+07f0h	; look at drive spec in command
+	or	(hl)		; zero means default was taken
+	jp	nz,ccp+076bh	; if nonzero don't change it
+	ld	a,(bootdr1)	; take boot drive and increment it since
+	inc	a		; for a FCB A=1, B=2, ...
+	ld	(hl),a		; modify command line
+	ld	de,ccp+07d6h	; setup for retry
+	jp	ccp+06cdh	; go retry command
+
+;
+;  Patch CCP to show current user number in prompt
+;
+propat:	call	ccp+0113h	; get current user no
+	or	a
+	jp	z,prono		; do not show it if it's 0
+	cp	10		; see if 1 or 2 digits
+	jp	nc,pro2
+	add	a,'0'
+pro1:	call	ccp+008ch	; output a character
+prono:	ld	a,'>'		; prompt character
+	call	ccp+008ch	; output it
+	jp	ccp+0395h	; resume !
+pro2:	add	a,'0' - 10
+	push	af
+	ld	a,'1'
+	call	ccp+008ch
+	pop	af
+	jp	pro1
+
+;
+;  Patch BDOS to look at user 0 if file not found in current user #
+;
+pubpat:	ld	a,b		; get char count
+	or	a		; looking at first byte?
+	jp	nz,pubno	; no, skipit
+	ld	a,(de)		; get user # from directory
+	cp	0e5h		; active dir entry?
+	jp	z,pubno		; no
+	ld	a,(hl)		; get user# from dir entry
+	or	a		; is it user # 0?
+	jp	z,bdos+0776h	; yes, force char match regardless
+pubno:	ld	a,b
+	cp	13
+	jp	bdos+075bh
+
+;
+;  Print the message pointed to by <DE> and terminated by '$' to the console
+;  Leaves <B> unchanged
+;
+msg:	ld	a,(de)		; get character
+	cp	'$'		; is is the terminating character?
+	ret	z		; yes, we are done
+	ld	c,a		; 'conout' expects the character in <C>
+	call	conout		; disply it on console
+	inc	de		; point to next character
+	jp	msg		; and repeat
+
+;
+;  The WBOOT entry point gets control when a warm start occurs. A warm
+;  start is performed whenever a user program branches to location 0000H, or
+;  when the CPU is reset from the front panel. The CP/M system must be
+;  loaded from the first two tracks of drive A up to, but not including, the
+;  BIOS, or CBIOS, if the user has completed the patch. System parameters
+;  must be initialized as follows:
+;
+;	location 0,1,2	Set to JMP WBOOT for warm starts
+;			(000H: JMP 4A03H + b)
+;	location 3	Set initial value of IOBYTE, if implemented in the
+;			CBIOS
+;	location 4	High nibble = current user no; low nibble current
+;			drive
+;	location 5,6,7	Set to JMP BDOS, which is the primary entry point
+;			to CP/M for transient programs. (0005H: JMP 3C06H + b)
+;
+;  Upon completion of the initialization, the WBOOT program must branch to the
+;  CCP at 3400H + b to restart the system. Upon entry to the CCP, register C
+;  is set to the drive to select after system initialization. The WBOOT
+;  routine should read location 4 in memory, verify that is a legal drive, and
+;  pass it to the CCP in register C.
+;
+wboot:	ld	sp,stack	; Local stack
+;
+;  Reset IDE controller
+;
+	call	ideReset	; Reset controller
+	ld	a,0		; Message 0 in case of error
+	jr	nz,wberr	; Jump if error
+;
+;  Load CCP + BDOS (not CBIOS).  Read as many 512 byte sectors
+;  as possible straight into memory.  If we read a non-multiple 
+;  of 4, then read the last 512 byte block into dskbuf and copy
+;  however many 128 byte pages (1, 2 or 3) to complete the load.
+;
+	ld	hl,dskbuf	; Where data goes
+	ld	(dskbufp),hl	; Store for ideRead
+	ld	hl,ccp		; Destination
+	ld	de,0900h/80h	; Starting 128 byte sector number (CCP base)
+	ld	b,sectors	; Number of sectors to transfer
+;
+again:
+	push	de		; Save sector
+	srl	d		; Divide by 2
+	rr	e		; ...
+	srl	d		; Divide by 4
+	rr	e		; ...
+	push	hl		; Save HL
+	ld	a,(bootdr1)	; Drive to read from
+	call	ideRead		; Read sector 512 byte sector
+	pop	hl		; Recover HL
+	pop	de		; Recover DE
+	ld	a,1		; Message in case of error
+	jr	nz,wberr	; Skip if error
+;
+	push	de		; Save sector number
+	push	bc		; Save sector count
+	push	hl		; Save target address
+	ex	de,hl		; Swap target and sector number
+	ld	de,dskbuf	; Point to IDE buffer
+	ld	a,l		; Get low of sector
+	and	003h		; Keep only low buts
+	rrca			; Shift into top two bits
+	rrca			; Shift into top two bits
+	ld	l,a		; Store To L
+	ld	h,0		; Clear high
+	add	hl,hl		; * 2
+	add	hl,de		; Add to HL
+	ld	bc,80h		; Number of bytes
+	pop	de		; Recover target address
+	ldir			; Copy (HL) to (DE) for BC
+	ex	de,hl		; Get DE to HL for as next target
+	pop	bc		; Recover sector count
+	pop	de		; Recover sector number
+	inc	de		; Next sector
+	djnz	again		; Repeat while B <> 0
+;
+	jp	entcpm		; And start CP/M
+;
+;  A has error message number to print
+;
+wberr:	ld	e,a		; Message number to E
+	ld	d,0		; Clear high
+	ld	hl,wbootet	; Table address
+	add	hl,de		; Offset into table
+	add	hl,de		; Offset into table
+	ld	e,(hl)		; Get low byte of table
+	inc	hl		; Point to high byte
+	ld	d,(hl)		; Get high byte of table
+	call	msg		; Print it
+	jp	boot		; Try to reboot instead of dying
+	halt			; And die
+;
+wbootet:dw	wboote0
+	dw	wboote1
+wboote0:db	cr, lf, 'Controller busy never cleared', cr, lf, '$'
+wboote1:db	cr, lf, 'Error while reading', cr, lf, '$'
+
+;
+;  You should sample the status of the currently assigned console device and
+;  return 0FFH in register A if a character is ready to read and 00H in register
+;  A if no console characters are ready.
+;
+;  Console in/out routines - use SIO port 1
+;
+const:	in	a,(constat)	; get console status
+	rra			; I bit into carry
+	ld	a,0		; prepare no character available
+	ret	nc		; I bit clear means no character, done
+	dec	a		; character available, result is 0ffh
+	ret			; done
+
+;
+;  The next console character is read into register A, and the parity bit is set,
+;  high-order bit, to zero.  If no console character is ready, wait until a
+;  character is typed before returning.
+;
+conin:	in	a,(constat)	; Get status
+        and	001h		; Text Rx status
+        jp	z,conin		; 0 == no char ready
+        in	a,(condata)	; Read character
+	and	7fh		; clear bit 8
+	ret
+
+;
+;  The character is sent from register C to the console output device. The
+;  character is in ASCII, with high-order parity bit set to zero. You might
+;  want to include a time-out on a line-feed or carriage return, if the console
+;  device requires some time interval at the end of the line (such as a TI Silent
+;  700 terminal). You can filter out control characters that cause the console
+;  device to react in a strange way (CTRL-Z causes the Lear-Siegler terminal
+;  to clear the screen, for example).
+;
+conout:	in	a,(constat)	; Get status
+        and	004h		; Tx empty?
+        jp	z,conout	; 0 == No
+        ld	a,c		; Get character to send
+        out	(condata),a	; Send it
+	ret
+
+;
+;  Reader/punch routines use sio port 2
+;
+;  The character is sent from register C to the currently assigned listing
+;  device. The character is in ASCII with zero parity bit.
+;
+list:				; list aliased to punch
+
+;
+;  The character is sent from register C to the currently assigned punch
+;  device. The character is in ASCII with zero parity.
+;
+punch:	in	a,(punstat)	; get punch status
+	and	004h		; mask output bit
+	jp	z,punch		; jump back if not ready for output
+	ld	a,c		; prepare character for output
+	out	(pundata),a	; do it
+	ret
+
+;
+;  The next character is read from the currently assigned reader device into
+;  register A with zero parity (high-order bit must be zero); an end-of-file
+;  condition is reported by returning an ASCII CTRL-Z(1AH).
+;
+reader:	in	a,(punstat)	; get reader status
+        and	001h		; Text Rx status
+        jp	z,reader	; 0 == no char ready
+	in	a,(pundata)	; read character
+	ret
+
+;
+;  The disk drive given by register C is selected for further operations, where
+;  register C contains 0 for drive A, 1 for drive B, and so on up to 15 for
+;  drive P (the standard CP/M distribution version supports four drives). On
+;  each disk select, SELDSK must return in HL the base address of a 16-byte
+;  area, called the Disk Parameter Header, described in Section 6.10. For
+;  standard floppy disk drives, the contents of the header and associated
+;  tables do not change; thus, the program segment included in the sample
+;  CBIOS performs this operation automatically.
+;
+;  If there is an attempt to select a nonexistent drive, SELDSK returns HL =
+;  0000H as an error indicator. Although SELDSK must return the header
+;  address on each call, it is advisable to postpone the physical disk select
+;  operation until an I/O function (seek, read, or write) is actually performed,
+;  because disk selects often occur without ultimately performing any disk
+;  I/O, and many controllers unload the head of the current disk before
+;  selecting the new drive. This causes an excessive amount of noise and disk
+;  wear. The least significant bit of register E is zero if this is the first
+;  occurrence of the drive select since the last cold or warm start.
+;
+seldsk:	ld	hl,0		; select disk number
+	ld	a,c
+	ld	(diskno),a
+	cp	ndisks		; number of disk drives
+	ret	nc		; error - disk number too high
+	ld	l,a		; <HL> := disk number
+	ld	h,0
+	add	hl,hl		; disk number * 2
+	add	hl,hl		; disk number * 4
+	add	hl,hl		; disk number * 8
+	add	hl,hl		; disk number * 16
+	ld	de,dpbase	; dpbase entries have size of 16 bytes
+	add	hl,de		; <HL> = 16 * disknumber + dpbase
+	ret
+
+;
+;  The disk head of the currently selected disk (initially disk A) is moved to
+;  the track 00 position.  If the controller allows access to the track 0 flag
+;  from the drive, the head is stepped until the track 0 flag is detected. If the
+;  controller does not support this feature, the HOME call is translated into a
+;  call to SETTRK with a parameter of 0.
+;
+home:	ld	bc,0		; move to track 00
+				; fall into settrk
+
+;
+;  Register BC contains the track number for subsequent disk accesses on the
+;  currently selected drive. The sector number in BC is the same as the
+;  number returned from the SECTRAN entry point. You can choose to seek
+;  the selected track at this time or delay the seek until the next read or 
+;  write actually occurs.  Register BC can take on values in the range 0-76
+;  corresponding to valid track numbers for standard floppy disk drives and
+;  0-65535 for nonstandard disk subsystems.
+;
+settrk:	ld	l,c		; save track
+	ld	h,b
+	ld	(track),hl
+	ret
+
+;
+;  Register BC contains the sector number, 1 through 26, for subsequent disk
+;  accesses on the currently selected drive. The sector number in BC is the
+;  same as the number returned from the SECTRAN entry point. You can
+;  choose to send this information to the controller at this point or delay
+;  sector selection until a read or write operation occurs.
+;
+setsec:	ld	l,c		; save sector
+	ld	h,b
+	ld	(sector),hl
+	ret
+
+;
+;  Logical-to-physical sector translation is performed to improve the overall
+;  response of CP/M. Standard CP/M systems are shipped with a skew factor
+;  of 6, where six physical sectors are skipped between each logical read
+;  operation. This skew factor allows enough time between sectors for most
+;  programs to load their buffers without missing the next sector. In particular
+;  computer systems that use fast processors, memory, and disk subsystems,
+;  the skew factor might be changed to improve overall response. However,
+;  the user should maintain a single-density IBM-compatible version of CP/M
+;  for information transfer into and out of the computer system, using a skew
+;  factor of 6.
+;
+;  In general, SECTRAN receives a logical sector number relative to zero in
+;  BC and a translate table address in DE. The sector number is used as an
+;  index into the translate table, with the resulting physical sector number in
+;  HL. For standard systems, the table and indexing code is provided in the
+;  CBIOS and need not be changed.
+;
+;  Hard disks don't require sector translation (at least, not modern ones),
+;  so we return the same sector in HL
+;
+sectrn: ld	l,c		; <HL>:= BC
+	ld	h,b		; load upper byte
+	ret			; return
+
+;
+;  Register BC contains the DMA (Disk Memory Access) address for
+;  subsequent read or write operations. For example, if B = 00H and C = 80H
+;  when SETDMA is called, all subsequent read operations read their data
+;  into 80H through 0FFH and all subsequent write operations get their data
+;  from 80H through 0FFH, until the next call to SETDMA occurs. The initial
+;  DMA address is assumed to be 80H. The controller need not actually
+;  support Direct Memory Access. If, for example, all data transfers are
+;  through I/O ports, the CBIOS that is constructed uses the 128 byte area
+;  starting at the selected DMA address for the memory buffer during the
+;  subsequent read or write operations.
+;
+setdma:	ld	l,c		; set dma address
+	ld	h,b
+	ld	(dmaad),hl
+	ret
+
+;
+;  Assuming the drive has been selected, the track has been set, and
+;  the DMA address has been specified, the READ subroutine attempts to
+;  read one sector based upon these parameters and returns the following
+;  error codes in register A:
+;
+;	0	no errors occurred
+;	1	nonrecoverable error condition occurred
+;
+;  Currently, CP/M responds only to a zero or nonzero value as the return
+;  code. That is, if the value in register A is 0, CP/M assumes that the disk
+;  operation was completed properly. If an error occurs the CBIOS should
+;  attempt at least 10 retries to see if the error is recoverable. When an error
+;  is reported the BDOS prints the message BDOS ERR ON x: BAD SECTOR. The 
+;  operator then has the option of pressing a carriage return to ignore the 
+;  error, or CTRL-C to abort.
+;
+;  In theory, we should check the DPB for the number of sectors per track.
+;  In reality (a small town right next to Murphy), we know that there are
+;  16 sectors per track.  We also know that since CP/M can only handle
+;  65536 sectors of 128 bytes, that with 16 seconds per track, the track
+;  number should never be greater than 0x0fff.  OR'ing in the sector 
+;  (which should always be < 16) gives us a 16 bit LBA.  
+;  
+;
+read:	ld	hl,dskbuf	; Buffer to use for operations
+	ld	(dskbufp),hl	; Store for ideRead
+	ld	a,(diskno)	; Get disk number
+	ld	de,(track)	; Get desired track
+	call	ideRead		; Read the sector
+	jp	z,read1		; If no error, skip
+;
+	ld	a,1		; Indicate error
+	ret			; Return to caller
+;
+read1:
+	ld	a,(sector)	; Get sector (better be 0..3!)
+	rrca			; Shift to upper 2 bits
+	rrca			; Shift to upper 2 bits
+	ld	l,a		; Move to L
+	ld	h,0		; Clear high
+	add	hl,hl		; * 2
+	ld	de,dskbuf	; Address of IDE buffer
+	add	hl,de		; Add as base
+	ld	de,(dmaad)	; Get destination address
+	ld	bc,128		; Number bytes to move
+	ldir			; Move to user space
+	ld	a,0		; No error
+	ret			; Return to caller
+
+;
+;  You return the ready status of the list device used by the DESPOOL
+;  program to improve console response during its operation. The value 00 is
+;  returned in A if the list device is not ready to accept a character and 0FFH
+;  if a character can be sent to the printer.  A 00 value should be returned if
+;  LIST status is not implemented.
+;
+listst:	xor	a		; <A> := 0 means no error
+	ret
+
+;
+;  Data is written from the currently selected DMA address to the currently
+;  selected drive, track, and sector. For floppy disks, the data should be
+;  marked as nondeleted data to maintain compatibility with other CP/M
+;  systems. The error codes given in the READ command are returned in
+;  register A, with error recovery attempts as described above.
+;
+;  C = 0 if writing to an allocated sector
+;  C = 1 if writing to the directory
+;  C = 2 if writing to an unallocated sector
+;
+;  We only handle the unallocated case.  If it's an allocated or directory, we
+;  pre-read, and we always write.  Don't care for the idea of having unwritten
+;  data cached, given how often we press reset.
+;
+write:	ld	hl,dskbuf	; Buffer to use for operations
+	ld	(dskbufp),hl	; Store for ideWrite
+	ld	a,c		; Get write mode
+	cp	2		; Writing to unallocated block?
+	jp	z,write1	; Yes, skip pre-read
+;
+	ld	a,(diskno)	; Get disk number
+	ld	de,(track)	; Get desired track
+	call	ideRead		; Read the sector
+	jr	nz,write2	; If error, exit
+;
+write1:
+	ld	a,(sector)	; Get sector (better be 0..3!)
+	rrca			; Shift to upper 2 bits
+	rrca			; Shift to upper 2 bits
+	ld	l,a		; Move to L
+	ld	h,0		; Clear high
+	add	hl,hl		; * 2
+	ld	de,dskbuf	; Address of IDE buffer
+	add	hl,de		; Add as base
+	ld	de,(dmaad)	; Get destination address
+	ex	de,hl		; Swap source and destination
+	ld	bc,128		; Number bytes to move
+	ldir			; Move from user space
+;
+	ld	a,(diskno)	; Get disk number
+	ld	de,(track)	; Get desired track
+	call	ideWrite	; Write sector back
+	jr	nz,write1	; If error, exit
+	ld	a,0		; Indicate no error
+	ret			; Return to caller
+;
+write2:
+	ld	a,1		; Indicate error
+	ret			; Return to caller
+
+;
+;  Reset IDE controller.  Wait 65536 samples to come ready.  If it
+;  does, return 0.  If controller times out, return -1.
+;
+ideReset:
+	ld	a,-1			; Invalid drive number
+	ld	(idedrv),a		; Invalidate sector cache
+	IDEOUT				; Put PIO in output mode
+	ld	a,004h			; IDE reset in device control register
+	out	(iifDataLow),a		; Write to data latch
+	out	(ideDeviceCtrl),a	; Strobe to controller
+	ld	a,000h			; Clear reset bit
+	out	(iifDataLow),a		; Write to data latch
+	out	(ideDeviceCtrl),a	; Strobe to controller
+	jp	ideWaitReady		; And return ready status
+
+;
+;  Read sector from IDE.  Returns 0 on success, ~0 on failure.
+;  <A> contains 8MB offset 0x00..0x0f
+;  <DE> contains IDE sector 0x0000..0x3fff
+;  Affects HL
+;
+ideRead:
+	push	bc			; Save BC
+	ld	b,a			; Store drive in B
+	ld	hl,idesec		; Point to low of last sector word
+	ld	a,e			; Get low of sector
+	cp	(hl)			; Same?
+	jr	nz,ideR1		; No, read must be done
+	inc	hl			; Point to high of last sector
+	ld	a,d			; Get high of sector
+	cp	(hl)			; Same?
+	jr	nz,ideR1		; No, read must be done
+	ld	hl,idedrv		; Point to last drive
+	ld	a,b			; Get drive
+	cp	(hl)			; Same drive?
+	jr	nz,ideR1		; No, read must be done
+	pop	bc			; Recover BC
+	xor	a			; No error, dskbuf has this sector
+	ret				; Return to caller
+;
+ideR1:
+	ld	a,b			; Recover drive number
+	pop	bc			; Recover BC
+	ld	(idedrv),a		; Store drive for next time
+	ld	(idesec),de		; Store sector for next time
+	call	ideWaitReady		; Wait for controller to be ready
+	ret	nz			; Exit if controller never readies
+;
+	call	ideSetLBA		; Set LBA from A:DE
+	ret	nz			; Exit if setting LBA errored
+;
+	IDECMD	cmdRead			; Send read command
+	IDESTATUS			; Read the controller status
+	ret	nz			; If not 0, return as error status
+;
+	call	ideWaitDRQ		; Wait for DRQ to come ready
+	ret	nz			; If not 0, we timed out on DRQ
+;
+	push	bc			; Save BC
+	ld	hl,(dskbufp)		; Pointer to 512 byte buffer to use
+	ld	b,0			; 256 words in a sector
+ideR2:
+	in	a,(ideData)		; Strobe 16 bits from controller
+	in	a,(iifDataLow)		; Read low data latch
+	ld	(hl),a			; Store it
+	inc	hl			; Next location
+	in	a,(iifDataHigh)		; Read high data latch
+	ld	(hl),a			; Store it
+	inc	hl			; Next location
+	djnz	ideR2			; Repeat while B <> 0
+	pop	bc			; Recover BC
+;
+	call	ideWaitReady		; PIO to input mode, wait for BUSY == 0
+	ret	z			; If 0, we're good
+;
+	in	a,(ideStatus)		; Get status
+	in	a,(iifDataLow)		; Read from latch
+	call	ideDebugHexA		; Print value
+	ld	de,ideRM1		; Message
+	call	msg			; Print it
+	ld	a,1			; Error value
+	ret				; Return to caller
+;
+ideRM1:	db	cr, lf, ' in ideRead', cr, lf, '$'
+
+;
+;  Write sector to IDE.  Returns 0 on success, ~0 on failure.
+;  This is very inefficient.  First we read the 512 byte sector from the
+;  IDE, then we copy the user's buffer into it, then we write it back
+;  out.  
+;  <A> contains 8MB offset 0x00..0x0f
+;  <DE> contains IDE sector 0x0000..0x3fff
+;
+ideWrite:
+	ld	(idedrv),a		; Store drive for next time
+	ld	(idesec),de		; Store sector for next time
+	call	ideWaitReady		; Wait for controller to be ready
+	ret	nz			; Exit if controller never readies
+;
+	call	ideSetLBA		; Set LBA from A:DE
+	ret	nz			; Exit if setting LBA errored
+;
+	IDECMD	cmdWrite		; Send write command
+	IDESTATUS			; Read the controller status
+	ret	nz			; If not 0, return as error status
+;
+	call	ideWaitDRQ		; Wait for DRQ to come ready
+	ret	nz			; If not 0, we timed out on DRQ
+;
+	IDEOUT				; Set PIO in output mode
+	push	bc			; Save BC
+	ld	hl,(dskbufp)		; Pointer to 512 byte buffer to use
+	ld	b,0			; 256 words in a sector
+ideW1:	
+	ld	a,(hl)			; Get byte from memory
+	inc	hl			; Next location
+	out	(iifDataLow),a		; Write to low data latch
+	ld	a,(hl)			; Get byte from memory
+	inc	hl			; Next location
+	out	(iifDataHigh),a		; Write to high data latch
+	out	(ideData),a		; Strobe 16 bit data to controller
+	djnz	ideW1			; Repeat while B <> 0
+	pop	bc			; Recover BC
+;
+	call	ideWaitReady		; PIO to input mode, wait for BUSY == 0
+	ret	z			; If 0, we're good
+;
+	in	a,(ideStatus)		; Get status
+	in	a,(iifDataLow)		; Read from latch
+	call	ideDebugHexA		; Print value
+	ld	de,ideWM1		; Message
+	call	msg			; Print it
+	ld	a,1			; Error value
+	ret				; Return to caller
+;
+ideWM1:	db	cr, lf, ' in ideWrite', cr, lf, '$'
+
+;
+;  Set up the Logical Block Address (LBA)
+;  <A> contains logical volume
+;  <DE> contains 512 byte sector number
+;  Returns 0 on success, ~0 on failure
+;
+ideSetLBA:
+	call	ideWaitReady		; Make sure we're ready
+	ret	nz			; Return if error
+;
+	push	af			; Save logical volume for later
+	IDEOUT				; PIOs to output mode
+	ld	a,1			; Number of sectors to transfer
+	out	(iifDataLow),a		; Write to low data latch
+	out	(ideSectCnt),a		; Strobe to IDE controller
+	ld	a,e			; Low bits of 28 bit sector number
+	out	(iifDataLow),a		; Write to low data latch
+	out	(ideLBAll),a		; Strobe to IDE controller
+	pop	af			; Get volume number
+	push	af			; Save it back
+	and	003h			; We only want bottom 2 bits
+	rrca				; Shift into top two bits
+	rrca				; Shift into top two bits
+	or	d			; OR in bits 8..13 of sector
+	out	(iifDataLow),a		; Write to low data latch
+	out	(ideLBAlh),a		; Strobe to IDE controller
+	pop	af			; A has logical volume
+	srl	a			; Shift into bottom bits
+	srl	a			; Shift into bottom bits
+	out	(iifDataLow),a		; Write to low data latch
+	out	(ideLBAhl),a		; Strobe to IDE controller
+	ld	a,0e0h			; Select LBA, drive 0
+	out	(iifDataLow),a		; Write to low data latch
+	out	(ideLBAhh),a		; Strobe to IDE controller
+	IDEIN				; PIOs back to input mode
+	xor	a			; Set to 0, indicate success
+	ret				; Return to caller
+
+;
+;  Wait for busy bit to go off.  If it does within the time limit,
+;  return 0.  Otherwise, return -1 for error.  Do a fast check before
+;  we go into the wait loop.
+;
+ideWaitReady:
+	push	bc			; Save BC
+	ld	b,a			; Store A
+	IDEIN				; Make sure we're in input mode
+	in	a,(ideStatus)		; Strobe controller status port
+	in	a,(iifDataLow)		; Read data latch
+	and	80h			; Check busy bit
+	jp	z,ideWR3		; Exit if not busy
+;
+	push	hl			; Save counter
+	ld	hl,0			; Give it this long
+ideWR1:
+	in	a,(ideStatus)		; Strobe controller status port
+	in	a,(iifDataLow)		; Read data latch
+	and	80h			; Check busy bit
+	jp	z,ideWR2		; Exit if 0
+	dec	hl			; Decrement counter
+	ld	a,h			; Get high byte
+	or	l			; OR with low
+	jr	nz,ideWR1		; Spin while busy
+	ld	a,-1			; Error!
+ideWR2:
+	or	a			; Set bits
+	pop	hl			; Return HL
+ideWR3:
+	ld	a,b			; Recover A
+	pop	bc			; Recover BC
+	ret				; Return to caller
+
+;
+;  Wait for DRQ bit to go on.  If it does within the time limit,
+;  return 0.  Otherwise, return -1 for error.  Do a fast check before
+;  we go into the wait loop.
+;
+ideWaitDRQ:
+	push	bc			; Save BC
+	ld	b,a			; Store A
+	IDEIN				; Make sure we're in input mode
+	in	a,(ideStatus)		; Strobe controller status port
+	in	a,(iifDataLow)		; Read data latch
+	and	08h			; Check DRQ bit
+	xor	08h			; Flip so 0 means good
+	jp	z,ideWD3		; Exit if it's ready for data
+;
+	push	hl			; Save counter
+	ld	hl,0			; Give it this long
+ideWD1:
+	in	a,(ideStatus)		; Strobe controller status port
+	in	a,(iifDataLow)		; Read data latch
+	and	08h			; Check DRQ bit
+	xor	08h			; Flip so 0 means good
+	jp	z,ideWD2		; Exit if 0
+	dec	hl			; Decrement counter
+	ld	a,h			; Get high byte
+	or	l			; OR with low
+	jr	nz,ideWD1		; Spin while busy
+	ld	a,-1			; Error!
+ideWD2:
+	or	a			; Set bits
+	pop	hl			; Return HL
+ideWD3:
+	ld	a,b			; Recover A
+	pop	bc			; Recover BC
+	ret				; Return to caller
+
+;
+;  DE contains value to print in ASCII hex
+;
+ideDebugHexHL:
+	push	af			; Save AF
+	ld	a,h			; Get high byte
+	call	ideDebugHexA		; Print it
+	ld	a,l			; Get low byte
+	call	ideDebugHexA		; Print it
+	pop	af			; Recover AF
+	ret				; Return to caller
+
+ideDebugHexDE:
+	push	af			; Save AF
+	ld	a,d			; Get high byte
+	call	ideDebugHexA		; Print it
+	ld	a,e			; Get low byte
+	call	ideDebugHexA		; Print it
+	pop	af			; Recover AF
+	ret				; Return to caller
+
+ideDebugHexBC:
+	push	af			; Save AF
+	ld	a,b			; Get high byte
+	call	ideDebugHexA		; Print it
+	ld	a,c			; Get low byte
+	call	ideDebugHexA		; Print it
+	pop	af			; Recover AF
+	ret				; Return to caller
+
+;
+;  A contains value to print in ASCII hex
+;
+ideDebugHexA:
+	push	af			; Save value to print
+	rrca				; Move high nybble to low
+	rrca				; Move high nybble to low
+	rrca				; Move high nybble to low
+	rrca				; Move high nybble to low
+	call	ideDebugHexNyb		; Print high nybble
+	pop	af			; Recover original value
+	jr	ideDebugHexNyb		; Print low nybble
+
+;
+;
+;
+ideDebugHexNyb:
+	push	af			; Save original value for caller
+	and	00fh			; Keep only low bits
+	add	a,090h			; Magic
+	daa				; Magic
+	adc	a,040h			; Magic
+	daa				; Magic
+	push	bc			; Save BC
+	ld	c,a			; Get character to print to C
+	call	conout			; Print it
+	pop	bc			; Recover BC
+	pop	af			; Recover original value
+	ret				; Return to caller
+
+ideDebugSpace:
+	push	af			; Save AF
+	push	bc			; Save BC
+	ld	c,' '			; Space
+	call	conout			; Print it
+	pop	bc			; Recover BC
+	pop	af			; Recover AF
+	ret				; Return to caller
+
+ideDebugCRLF:
+	push	af			; Save AF
+	push	bc			; Save BC
+	ld	c,cr			; CR
+	call	conout			; Print it
+	ld	c,lf			; LF
+	call	conout			; Print it
+	pop	bc			; Recover BC
+	pop	af			; Recover AF
+	ret				; Return to caller
+
+;
+;  Pointer to messages in the CCP to be converted to lowercase.
+;
+lctabs:	db	9		; (R)EAD ERROR
+	dw	ccp+03e0h	; DFE0
+	db	6		; (N)O FILE
+	dw	ccp+03f1h	; DFF1
+	db	2		; (A)LL
+	dw	ccp+0553h	; E153
+	db	7		; (N)O SPACE
+	dw	ccp+0608h	; E208
+	db	10		; (F)ILE EXISTS
+	dw	ccp+0683h	; E283
+	db	7		; (B)AD LOAD
+	dw	ccp+077bh	; E37B
+lctabe	equ	$
+
+;
+;  Table of where patch gets applied to, and a pointer to the patch code.
+;  Sometimes we overwrite the code with the patch, sometimes we patch a
+;  jump in to the code that comprises the patch.
+;
+patchs:	dw	ccp+0143h,	ccpp1	; DD43:	jp	ccpp1
+	dw	ccp+017dh,	ccpp2	; DD7D:	jp	ccpp2
+	dw	ccp+01e3h,	ccpp3	; DDE3:	jp	ccpp3
+	dw	ccp+0392h,	propat
+	dw	ccp+06dbh,	ccpat
+	dw	bdos+0c86h,	f13pat
+	dw	bdos+0758h,	pubpat
+patche	equ	$
+
+;
+;  In general, each disk drive has an associated (16-byte) disk parameter
+;  header that contains information about the disk drive and provides a
+;  scratch pad area for certain BDOS operations. The format of the disk
+;  parameter header for each drive is shown below, where each element is a
+;  word (16-bit) value.
+;
+;			DISK PARAMETER HEADER
+;	+-------+------+------+------+----------+-------+-------+-------+
+;	| XLT  | 0000 | 0000 | 0000 |DIRBUF| DPB  | CSV  | ALV  |
+;	+------+------+------+-------+----------+-------+-------+-------+
+;	  16B    16B    16B    16B    16B    16B    16B    16B
+;
+;  XLT	Address of the logical-to-physical translation vector, if used
+;  for this particular drive, or the value 0000H if no sector translation
+;  takes place (that is, the physical and logical sector numbers are the
+;  same). Disk drives with identical sector skew factors share the same
+;  translate tables.
+;
+;  0000	Scratch pad values for use within the BDOS, initial value is
+;  unimportant. DIRBUF Address of a 128-byte scratch pad area for directory
+;  operations within BDOS. All DPHs address the same scratch pad area.
+;
+;  DPB	Address of a disk parameter block for this drive. Drives
+;  withidentical disk characteristics address the same disk parameter block.
+;
+;  CSV	Address of a scratch pad area used for software check for
+;  changed disks. This address is different for each DPH.
+;
+;  ALV	Address of a scratch pad area used by the BDOS to keep disk
+;  storage allocation information. This address is different for each DPH.
+;
+;  Given n disk drives, the DPHs are arranged in a table whose first row of 16
+;  bytes corresponds to drive 0, with the last row corresponding to drive n-1.
+;  In the following figure the label DPBASE defines the base address of the
+;  DPH table.
+;
+;  DPBASE:
+;  00     XLT00 0000  0000  0000  DIRBUF  DBP00 CSV00  ALV00
+;  01     XLT01 0000  0000  0000  DIRBUF  DBP01 CSV01  ALV01
+;                     (and so on through)
+; n-1    XLTn-1 0000  0000  0000 DIRBUF  DBPn-1 CSVn-1 ALVn-1
+;
+
+;
+;  The translation vectors, XLT00 through XLTn-1, are located elsewhere in the
+;  BIOS, and simply correspond one-for-one with the logical sector numbers
+;  zero through the sector count 1. The Disk Parameter Block (DPB) for each
+;  drive is more complex. As shown below, particular DPB, that is addressed by
+;  one or more DPHS, takes the general form:
+;
+;	+---+---+---+---+---+---+---+---+---+---+
+;	|SPT|BSH|BLM|EXM|DSM|DRM|AL0|AL1|CKS|OFF|
+;	+---+---+---+---+---+---+---+---+---+---+
+;	 16B 8B  8B  8B  16B 16B 8B  8B  16B 16B
+;
+;  where each is a byte or word value, as shown by the 8b or 16b indicator
+;  below the field.
+;
+;  The following field abbreviations are used in the figure above:
+;	SPT	is the total number of sectors per track.
+;	BSH	is the data allocation block shift factor, determined by
+;		the data block allocation size.
+;	BLM	is the data allocation block mask (2[BSH-1]).
+;	EXM	is the extent mask, determined by the data block
+;		allocation size and the number of disk blocks.
+;	DSM	determines the total storage capacity of the disk drive.
+;	DRM	determines the total number of directory entries that
+;		can be stored on this drive.
+;	AL0, AL1	determine reserved directory blocks.
+;	CKS	is the size of the directory check vector.
+;	OFF	is the number of reserved tracks at the beginning of the
+;		(logical) disk.
+;
+;  The values of BSH and BLM determine the data allocation size BLS, which is
+;  not an entry in the DPB.  Given that the designer has selected a value for
+;  BLS, the values of BSH and BLM are shown in the following table.
+;
+;	   BLS	BSH	BLM
+;	 1,024	  3	  7
+;	 2,048	  4	 15
+;	 4,096	  5	 31
+;	 8,192	  6	 63
+;	16,384	  7	127
+;
+;  where all values are in decimal. The value of EXM depends upon both the BLS
+;  and whether the DSM value is less than 256 or greater than 255, as shown in
+;  the table below.
+;
+;	EXM values
+;	   BLS	DSM<256		DSM>255
+;	 1,024	   0		N/A
+;	 2,048	   1		0
+;	 4,096	   3		1
+;	 8,192	   7		3
+;	16,384	  15		7
+;
+;  The value of DSM is the maximum data block number supported by this
+;  particular drive, measured in BLS units. The product (DSM + 1) is the total
+;  number of bytes held by the drive and must be within the capacity of the
+;  physical disk, not counting the reserved operating system tracks.
+;
+;  The DRM entry is the one less than the total number of directory entries
+;  that can take on a 16-bit value. The values of AL0 and AL1, however, are
+;  determined by DRM. The values AL0 and AL1 can together be considered a
+;  string of 16-bits, as shown below.
+;
+;      |--------- AL0 ---------|-------- AL1 ----------|
+;       00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15
+;
+;  Position 00 corresponds to the high-order bit of the byte labeled AL0 and
+;  15 corresponds to the low-order bit of the byte labeled AL1. Each bit
+;  position reserves a data block for number of directory entries, thus
+;  allowing a total of 16 data blocks to be assigned for directory entries
+;  (bits are assigned starting at 00 and filled to the right until position
+;  15). Each directory entry occupies 32 bytes, resulting in the following
+;  tabulation:
+;
+;	   BLS		Directory Entries
+;	 1,024		32 times # bits
+;	 2,048		64 times # bits
+;	 4,096		128 times # bits
+;	 8,192		256 times # bits
+;	16,384		512 times # bits
+;
+;  Thus, if DRM = 127 (128 directory entries) and BLS = 1024, there are 32
+;  directory entries per block, requiring 4 reserved blocks. In this case, the
+;  4 high-order bits of AL0 are set, resulting in the values AL0 = 0F0H and
+;  AL1 = 00H.
+;
+;  The CKS value is determined as follows: if the disk drive media is
+;  removable, then CKS = (DRM + 1)/4, where DRM is the last directory entry
+;  number. If the media are fixed, then set CKS = 0 (no directory records are
+;  checked in this case).
+;
+;  Finally, the OFF field determines the number of tracks that are skipped at
+;  the beginning of the physical disk. This value is automatically added
+;  whenever SETTRK is called and can be used as a mechanism for skipping
+;  reserved operating system tracks or for partitioning a large disk into
+;  smaller segmented sections.
+;
+;  To complete the discussion of the DPB, several DPHs can address the same
+;  DPB if their drive characteristics are identical.  Further, the DPB can be
+;  dynamically changed when a new drive is addressed by simply changing the
+;  pointer in the DPH; because the BDOS copies the DPB values to a local area
+;  whenever the SELDSK function is invoked.
+;
+;  Returning back to DPH for a particular drive, the two address values CSV
+;  and ALV remain. Both addresses reference an area of uninitialized memory
+;  following the BIOS. The areas must be unique for each drive, and the size
+;  of each area is determined by the values in the DPB.
+;
+;  The size of the area addressed by CSV is CKS bytes, which is sufficient to
+;  hold the directory check information for this particular drive. If CKS =
+;  (DRM + 1)/4, you must reserve (DRM + 1)/4 bytes for directory check use. If
+;  CKS = 0, no storage is reserved.
+;
+;  The size of the area addressed by ALV is determined by the maximum number
+;  of data blocks allowed for this particular disk and is computed as (DSM/8)
+;  + 1.
+
+;
+;  Macro for hard drives (assumes all volumes are the same size).  All
+;  disks share the same DIRBUF and DPB.  The CSV is 0 since there's no
+;  checking for changed disks.  The ALV buffer is created in the scratch 
+;  area by the 'defall' macro.
+;
+defdw	macro	?value
+	dw	all0&?value
+	endm
+
+defdp	macro	?number
+	local	?hdi
+?hdi	defl	0
+	rept	?number
+	dw	0,0,0,0,dirbf,cfcard,0
+	defdw	%?hdi
+?hdi	defl	?hdi+1
+	endm
+	endm
+
+dpbase	equ	$
+	defdp	ndisks
+
+;
+;  DPB for a single 8MB disk
+;
+;  SPT=4, BSH=5, BLM=31 (BLS=4096), EXM=1, DSM=2043, DRM=1023, AL0=255, AL1=0, CKS=0, OFF=32
+;  This gives 16K reserved for the system (4 * 128 * 32).  
+;
+;  *1 The value subtracted is the number of BLS sized blocks occupied by the reserved
+;     tracks.  In this case, we've reserved 8K for ourselves, decreasing the DSM by 2
+;     BLS blocks (BLS=4096, 16K = BLS*4)  In the CBIOS.MAC code for SIMH that this was
+;     derived from, it so happened that one track was 4K, which was also the BLS size
+;     although that was never made explicitly clear.
+;
+;  Why 4 sectors per track?  Because a CF/IDE uses 512 bytes per sector, which makes the
+;  128 logical sector to 512 byte physical sector conversion easier.
+;
+cfcard:	dw	4		; SPT, sectors per track (logical 128 byte sectors)
+	db	5		; BSH, data allocation block shift factor, for BLS=4,096
+	db	31		; BLM, data allocation block mask, for BLS=4,096
+	db	1		; extent mask for BLS=4,096 and DSM>255
+	dw	2047-4		; DSM, maximum data block number (*1)
+	dw	1023		; DRM, number of directory entries - 1
+	db	0ffh,0		; AL0, AL1, 8 blocks reserved to hold all entries
+	; (number of directory entries)*32 = (number of reserved blocks)*(block size BLS)
+				; 1024 * 32 = 8 * 4096
+	dw	0		; CKS, set 0 since hard disk is fixed
+	dw	32		; OFF, number of tracks skipped at beginning of disk
+
+;
+;  Messages
+;
+msg1:	db	cr, lf
+	db	'0' + (msize/10)
+	db	'0' + (msize MOD 10)
+	db	'K CP/M Version 2.2 (JCW Z80, BIOS V1.00, '
+	db	'0' + ndisks
+	db	' HD, '
+	db	'2003-11-20)'
+	db	cr, lf, '$'
+secmsg:	db	cr, lf, 'Cannot find sector in register <B>', cr, lf, '$'
+
+;
+;  Variables
+;
+diskno:	db	0	; Currently selected disk drive
+sector:	dw	0	; Current sector
+track:	dw	0	; Current track
+dmaad:	dw	0	; Current DMA Address
+idedrv: db	0	; Drive number dskbuf last used for
+idesec:	dw	0	; Sector number dskbuf last used for
+dskbufp:dw	dskbuf	; Pointer to buffer
+dskbuf:	ds	512	; 1 IDE sector
+
+;
+;  Begin scratch area for BDOS
+;
+deflab	macro	?value
+all0&?value	equ	$
+	endm
+
+defall	macro	?number
+	local	?hdi
+?hdi	defl	0
+	rept	?number
+	deflab	%?hdi
+	ds	256
+?hdi	defl	?hdi+1
+	endm
+	endm
+
+dirbf:	ds	128		; directory work space
+	defall	ndisks		; ALVs (basically ndisks * 256)
+	ds	64		; 64 bytes for a local stack
+stack	equ	$		; Stack grow backwards!
+
+biosend	equ	$
+biossiz	equ	biosend-bios
+
+;
+;  Fill remainder of page with 0x00
+;
+fillmod	equ	biossiz AND 00ffh
+    if	fillmod gt 0
+fillsiz	equ	100h-fillmod
+	ds	fillsiz
+    endif
+
+;
+;  Print out what to set the bioslen to, and how many pages to save
+;
+    if2
+padjust	macro	?newsiz
+	.printx	/Adjust bioslen in MEMCFG.LIB to ?newsiz/
+	endm
+
+psize	macro	?val1,?val2,?val3,?val4
+	.printx	/BIOS extends from ?val1 to ?val2 (Size ?val3, bioslen = ?val4)/
+	endm
+
+psave	macro	?value
+	.printx	/SAVE ?value CPMBOOT.COM/
+	endm
+
+;
+;  If we're into the Altair BIOS area give us a warning
+;
+	.radix	16
+	psize	%bios,%biosend,%biossiz,%bioslen
+    if	biossiz gt bioslen
+	padjust	%(100h*((biossiz + 0ffh) / 100h))
+    endif
+	.radix	10
+    if	biosend gt 0ff00h
+	.printx	/Warning: BIOS extends into Altair ROM/
+    endif
+
+    	psave	%(9+(ccplen + bdoslen + bioslen) / 100h)
+
+    endif
+
+	.dephase
+
+	end

@@ -1,0 +1,6 @@
+'specfile' contains a list of files to use with the 'makedisk' utility.  
+
+This file set will create a CF image with a base system (with Wordmaster, BIOS
+source, assembler, utilities), Aztec C (C compiler), Camel Forth (Forth),
+Kermit (communications program), NZ-COM (command line replacement for the CCP),
+QTerm, Wordstar (word processing) and Crosstalk (communications program).

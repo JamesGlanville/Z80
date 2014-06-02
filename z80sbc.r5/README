@@ -1,0 +1,72 @@
+'bootmon/camelmon' contains the Camel Forth boot monitor.
+'bootmon/forth' contains the original Forth text I'd enter.
+'cpm_bios' contains the BDOS, CCP and BIOS code to build the system. 
+'cpm_files' contains the files to build a CF image of good stuff
+'gal' contains the equations for the GAL22V10
+'gerbers' contains the Gerber files for producing the PCB
+'makedisk' contains a tool for building CF card images
+'protel' contains the Protel 99/SE project database
+'schematics' contains the schematics for the Z80 SBC
+'simh' contains a compiled copy of SIMH & startup script
+'simh_disks' contains various CP/M disk images
+
+Notes:
+
+Once the boot monitor is booted, the keyword is 'boot', to boot from drive A:
+(the first logical 8MB volume on the CF card).  You can also use 'x nboot' to
+boot from any of the supported logical volumes.  The monitor writes the boot
+drive to 0xffff, and the BIOS uses that as the default drive for warmstarts and
+such.
+
+The system supports (3) 8MB volumes.  I use a 32MB CF card, and just toss the
+last 6MB, since I didn't want to create a special DPB for it (CF cards use 1000
+bytes in a K, instead of 1024.  So 32MB really has 64000 512 byte sectors).
+
+The basic overview is pretty simple.  The CF card is attached to a PIO, with
+the D0..D7 lines to port A, and the D8..D15 lines to port B.  The PAL decodes
+two blocks of addresses, one that is the equivalent of the 0x1f0 block for an
+IDE drive in a PC architecture, and one for the 0x3f0 block.  Doing an I/O
+write to 0x23 sets up the address lines A0..A2 to the CF card, the PAL
+generates the /CS0 to the CF card, and the data on port A and port B gets
+latched into the CF controller.  For a read, it's almost the same, except that
+an extra PAL signal is used to the nRDY lines are used to latch the data from
+the CF card on read.
+
+The overhead for this scheme is having to do 4 extra instructions to turn the
+PIO ports from read to write or write to read, and a dummy I/O cycle for each
+16 bits transferred in data mode, or each 8 bits in control mode (such as
+polling the CF card status).  This could be eliminated by using 74652's (I
+think.  I don't have the number in front of me, but they are bidirectional
+latches).
+
+The reason I chose the PIO interface is to use the PIO on the Z84C15 when I
+build the SOAPOC design, my excercise in a miniature Z80 system, without going
+to an ASIC.  And with the CF cards being much faster than the Z80, the overhead
+of the few extra instructions seems to be minimal.  I haven't run an actual
+benchmark, but I seem to get about 32K/s writing speed, and probably 4x that
+reading.  The reason for this is that writes are immediately committed.  Even
+though there is a 512 byte buffer for the current sector in BIOS, I commit
+writes whenever a 128 byte block has been written.  I do this because I do not
+want directory entries buffered.  Reads are fully deblocked, so if you read 4
+consecutive sectors that are 512 byte aligned, one read is done from the CF
+card for the first sector, and the remaining three reads are read from the
+buffer.  
+
+Fun things to do would be to read the sector count of the CF card on the fly
+and build however many DPBs are needed to support that sized card.  The
+drawback to this is that each DPB needs 256 bytes of scratch, and that abouts
+to 16 * 256, 4K of buffers.  Pretty wasteful for a smaller CF card.  I've toyed
+with reserving sector 0 to implement a volume directory, and allowing multiple
+file system types on the disk.  Having ext2, VFAT, and CP/M volumes on the same
+card would be handy for shuffling data around.  I haven't thoroughly
+investigated what it would take to do a dynamic resizing of a CP/M system at
+boot.  Based on the number of volumes present, you could setup for a 64K
+system, 63K, 62K, etc as needed to minimize buffer space wastage.
+
+Of course, in all this, I get a little discouraged, as ZCPR3 and CP/M 3.0
+support a lot of this.  I got out of CP/M before 3.0 really hit, so I've never
+brought one up.  I'd also like to do a bank switched system, with complete page
+remapping on 1K or 2K page sizes.  However, my VHDL skills are not up to par to
+write that yet.  And now that I have all the basic stuff running, other than
+finishing the SOAPOC design, I'm not sure I want to go there.  Half the fun was
+just proving the PIO interface worked.  

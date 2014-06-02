@@ -1,0 +1,758 @@
+
+                        Documentation for Z80MR
+                         A Z80 Macro Assembler
+				  by
+			    Mike Rubenstein
+
+
+Introduction
+-------------
+Z80MR is a Z80 macro  assembler  with  syntax closely following RMAC and
+MAC.  Written by Mike Rubenstein (Hence the name  "Z80MR")  it assembles
+standard Zilog Z80 mnemonics into an Intel Hex format. (The accompanying
+Z1.COM assembles directly to a .COM file.) The resulting file (which has
+a .HEX extension) can be translated to a .COM file by use of LOAD.COM or
+the public  domain MLOAD.COM file if you used the conventional ORG 0100H
+with the source code.  If it ORG's  elsewhere, the .HEX file may be read
+into memory and manipulated with DDT.COM.
+
+
+Why Z80
+-------
+Virtually all CP/M computers placed on the market since 1981 use the Z80
+microprocessor.  The Z80 actually runs all  of the 8080 instructions but
+in addition there are more instructions unknown to the  8080.  The extra
+instructions were  designed for increased speed, easier programming, and
+more compact code.  For this reason it is to your best advantage to pro-
+gram in Z80 code for CP/M.
+
+
+Z80 Mnemonics
+-------------
+Z80 mnemonics are a great improvement over those used for the 8080. Some
+thought was given to logical,  universal  mnemonics that are much easier
+to remember and use.  I learned assembly language on  the  8080  and re-
+sisted the  change  to  Z80  at first.   After using Z80 mnemonics for a
+short time, I became very unwilling  to do anything with 8080 code.  Now
+I run almost every 8080 program that comes  in  through  a  8080  to Z80
+translating program  (XIZ.COM  by  Irv Hoff, another free, public domain
+program).  Even if you are writing programs for the 8080 it is still far
+easier to write in  Z80  mnemonics.  There  is a special listing command
+that flags Z80-only instructions for this very reason (described later).
+
+Macros
+------
+Macros are a way of  writing  subroutines  in assembly language and then
+calling the subroutine by entering the 'macro name' into the source. The
+macro may be called as many times as necessary anywhere  in  the proram.
+When the assembler is operated the lines of source code that make up the
+macro will  be inserted into the file by the assembler.  Note that using
+a macro does not reduce  the  size  of  the object code that is produced
+since all the lines of code that make up the macro definition are assem-
+bled into the object file at assembly time. This is called expanding the
+macro.  By using the "*MACLIST ON" option, the lines of code produced by
+the expansion of a macro are listed in the .PRN file.  Then the code can
+be examined and at times optimized in certain locations.
+
+
+                            Assembler Syntax
+                            ----------------
+
+Components and General Form of Assembly Language Programs
+---------------------------------------------------------
+The structure of an assembly  language  program  is more important to an
+assembler than the actual instructions you write.  A program  that would
+run beautifully  can  fail  to assemble if the syntax is not correct.  A
+program with no errors at  assembly  time  is not guaranteed to run cor-
+rectly (or as expected).  The assembler's report of 0 errors  means that
+it understood all of the instructions you entered, not that your program
+is logically correct.
+
+
+Fields
+------
+Assemblers are almost always  field-oriented,  some  to a greater degree
+than others.  A field is a flexible position in the  line  of  code with
+respect to  the  right margin.  This assembler recognizes 4 fields in an
+assembly language source line.
+
+
+LABEL   INSTRUCTION     OPERAND         COMMENT
+  ^         ^              ^               ^
+  1         2              3               4
+
+The assembler knows when it has reached  the end of a field when it sees
+a 'field delimiter'.  This can be a space or a tab  for  this assembler,
+though some  require semicolons.  It's immaterial whether you use spaces
+or tabs
+
+Label Field
+-----------
+A symbol is a word used to represent a number. Symbols that refer to ad-
+dresses are called labels.  The assignment of a number to a label can be
+defined as the lines below:
+
+TEN     EQU     10
+START   EQU     100H
+
+or calculated by the assembler as an address for branching instructions.
+
+START:  JP      FINISH
+        NOP
+        NOP
+
+FINISH: JP      START
+
+Also notice that the label is  optional  and is only for the programmers
+conveniance.
+
+Labels must appear in the label field.  Some assemblers allow you to in-
+dent labels but this one won't.  It assumes anything in the first column
+is a label; if not in the first column then it's something else.
+
+        START   EQU     100H
+
+Will give you an error.  It assumes "START" is an instruction but is un-
+able to match that to a Z80 opcode.
+
+The M80 (is the only) assembler that requires a colon after a label.  It
+is this distinction that  allows  such  labels to be indented.  No other
+assembler known to be available for either 8080 or Z80 source code needs
+such a colon.  Several 'format' program's (such as  FORM7  by  Irv Hoff)
+can optionally  place  colons after all labels where M80 expects to find
+them or remove any colons already present.  M80 is the only assembler to
+care, one way or the other.  Some people think it's easier to search for
+a label that has an accompanying colon.
+
+This assembler only examines the  first  six  characters of any label or
+symbol so  that if the  following labels were used  in the same program:
+
+FINISH1 EQU     1000H
+FINISH2 EQU     2000H
+
+A 'D' error (duplicate symbols) would be generated.
+
+
+Operation and Operand Fields
+----------------------------
+The operation field follows the label field and may either contain a Z80
+op code mnemonic, an assembler directive (or pseudo op) or a macro call.
+Assembler directives and macros are  described  later in this file. This
+field will usally contain the mnemonic for a Z80  instruction.  Some Z80
+instructions only  use  this field while others contain an operand which
+will be located in the operand field.
+
+GOBACK: OR      A
+        RET     Z
+        LD      A,0FFH
+        RET
+
+The way Z80 mnemonics were designed,  the number of nmenonics in the op-
+eration portion of instructions is kept to a minimum since  the operands
+really distinguish  the  differences  between similar instructions.  The
+first line above is a  good  example  of this.  The operation is an 'OR'
+operation on the number in the accumulator (implied) with another regis-
+ter.  It makes sense that the operand should be the  register containing
+the other  number  in the 'OR' operation.  In Z80 assembly language this
+is the case.  The first line  OR's the accumulator with the accumualator
+(used to see if the accumulator contains a 0).  Notice  that  the second
+line uses  the  operand field to contain the condition for a conditional
+jump (in this case the zero flag). The third line uses the operand field
+to contain both the target register  for  a load and the number to load.
+The last line is an unconditional return which  uses  the  same operator
+(RET) as  the  conditional return but does not use the operand field be-
+cause there are no conditons  to  place there.  This structure makes Z80
+programs much more readable than 8080 programs as well as making the in-
+structions easier to remember.  The following is the  same  code written
+with 8080  mnemonics.  Notice the different philosophy on the use of the
+fields.
+
+GOBACK: ORA
+        RET     Z
+        MVI     A,0FFH
+        RET
+
+Also the  LD  command in the  Z80  is used for all data moves while 8080
+users must remember a different mnemonic  for different types of  moves.
+
+        8080                    Z80
+
+        MOV     H,A             LD      H,A
+        MOV     M,A             LD      (HL),A
+        MVI     H,00            LD      H,00
+        LXI     H,0000          LD      HL,0000
+
+
+The Comment Field
+-----------------
+Comments are not limited to  the  comment  field and can actually be the
+entire line.  All assemblers recognize the semicolon as the beginning of
+a comment and then ignore the rest of the  line.  For  compatability be-
+tween assemblers  it is a good to begin comments with a semicolon.  This
+assembler only looks for a  semicolon  in the first column.  It needs no
+semicolon in the normal comment field.
+the following methods of inserting comments are good syntax.
+
+1. A semicolon in column one will cause the assembler to consider every-
+   thing following it to be considered a comment.
+
+2. The first blank  encountered  following  the beginning of the operand
+   field will cause the assembler to consider the rest of the line to be
+   considered a comment, thus a semicolon in the comment field is super-
+   fluous and its presence is ignored in any event.
+
+; An adventure in Comments, a short tale
+
+START:  JP      FINISH          Finish this story
+        NOP                     ASM.COM, M80.COM, etc. would make errors
+                                on these two lines
+
+FINISH: RET                     That's all folks (Z80MR accepts this ok)
+
+
+NOTE:  If you are wondering how Z80MR  can determine where to locate the
+       comment field, it's really very simple - it counts spaces.  M80MR
+       would not like the following line, either:
+
+                                Equates start  in  the instruciton field
+
+       Z80MR thinks this is identical to:
+
+ Equates start in the instruciton field
+^
+(column 1 is empty)
+
+       since that in effect is  in  "the 2nd column.  Z80MR accepts this
+       next line as normal:
+
+ JP START jump to the start of the program
+^
+(column 1 is empty)
+
+      since it does not begin in the first column, the next thing on the
+      line has to be an instruction.  If the characters do not match one
+      of the standard Z80 instructions, it will issue an error statement
+
+                Although Z80MR is very flexible in this regard,
+                programs written in this manner for this assem-
+                bler cannot be used by other people using their
+                favorite commercial assembler.
+
+                This flexibility backfires completely with con-
+                ditionals such as:
+
+                        IF      NOT ZCPR3
+
+                since ZCPR3 is now considered to be a comment.
+                There is an easy way around that, however, use
+                this for such conditionals:
+
+                        IF      NOT.ZCPR3
+
+Numbers and Bases
+-----------------
+The assembler will accept numbers in HEX (base 16) BINARY (base 2) or in
+DECIMAL.  Hex numbers must end with  an  'H' and binary numbers must end
+with a 'B'.  Decimal numbers need no suffix letter, similar to other as-
+semblers with which you are familiar.that of. When  a  HEX  digit begins
+with a letter, the letter should be preceded with a 0.
+
+        LD      A,0F3H
+        OR      01001000B
+        LD      HL,4000H+28
+
+
+                        Commanding the Assembler
+                        ------------------------
+
+The primary responsibility of the  assembler  is to change Z80 mnemonics
+into object code.  The assembler also  recognizes  certain  commands and
+directives that  the  programmer  can  use to manipulate the assembler's
+output.  These are often  referred  to  as 'pseudo-ops'.  This assembler
+requires these pseudo-ops to be in upper case.  A  description  of these
+commands follows:
+
+ORG     <expr>    Sets the origin of the  code or section of code.  This
+                  sets the reference number that the  assembler  uses to
+                  generate addresses  for  labels and instructions.  The
+                  <expr> can be a label or any specified value, such as:
+
+                        ORG     0
+                        ORG     BASE
+
+END     <symb>    Determines the end  of  an  assembly language program.
+                  <symb> if present describes the  first  executable in-
+                  struction of the program.
+
+DW      wordlist
+DEFW    wordlist
+                  Both of  these  have  identical meanings.  In assembly
+                  language programs, 8 bit values are  called  bytes and
+                  16 bit  values are called words.  Addresses are assem-
+                  bled with the  most  significant  byte (MSB) following
+                  the least significant byte (LSB) because  this  is how
+                  the  microprocessor  handles  these  values.  This  DW
+                  pseudo-op allows  describing  these values in a normal
+                  manner (such as 01AF) with most-significant-byte first
+                  and still assemble correctly for the processor.
+
+                        DW      8000H
+                 ;                       will assemble the same as
+                        DB      00H
+                        DB      80H
+
+                  If more than one word  is  to follow a DW, use another
+                  line or a DB line to start with.  A label can  also be
+                  used:
+
+                        START:  JP      FINISH
+                                DW      HELLO
+
+DDB     wordlist
+                  This pseudo-op is a  way  of  assembling 16 bit values
+                  with the MSB first (opposite of DW).
+
+                        DDB     8000H
+                                        will assemble the same as
+                        DB      80H
+                        DB      00H
+
+DB      bytelist
+DEFB    bytelist
+DEFM    bytelist
+DATA    bytelist
+                  These four  pseudo-ops  have  identical meanings.  The
+                  bytelist can be one byte or  multiple  bytes seperated
+                  with commas.  The  bytes  can  be  any mix of symbols,
+                  ASCII characters in  quotes,  or  numbers  on the same
+                  line.
+
+                 ESC    EQU     1BH
+                 CLRSCR EQU     1AH
+                 CRLF   DDB     0D0AH
+                 ;
+                        ORG     100H
+                 ;
+                        LD      DE,MES
+                        LD      C,9     ; BDOS  "print  string" function
+                        CALL    5
+                        RET
+                 ;
+                 MES:   DB      CRLF,'*Your Message Here *',CRLF
+                        DB      '*Or Here*','$'
+                 ;
+                        END
+
+                  If you've been waiting for an example to enter, assem-
+                  ble and run, try this one out. Just enter it, assemble
+                  and run it.
+
+                  The program prints the message using the BDOS function
+                  9 (Print String).
+
+                  Since the next bytes are just a carriage return then a
+                  line feed, the message with appear at the left side of
+                  the screen.
+
+DS      n
+DEFS    n         Reserve data space ( n bytes ).  Used to position, al-
+                  locate or label data  storage space in a program.  'n'
+                  is number describing the number of bytes reserved.
+
+                        DS      16
+
+                  reserves 16 bytes.  The next instruction will be loca-
+                  ted 16 bytes from the location counter when the DS was
+                  16 bytes from the location counter when the DS was
+
+label   EQU     <expr>
+                  The EQU sets the  label  equal to the expression.  The
+                  label should not be terminated with a colon  when used
+                  with an  EQU pseudo-op and need not be terminated with
+                  a colon in  any  event.  The  label  can be any symbol
+                  (byte or word) and the <expr> a number in  any  of the
+                  following forms:
+
+                        SWEET   EQU     16          Decimal
+                        SWEET   EQU     10H         Hex
+                        SWEET   EQU     00010000B   Binary
+
+                  With this assembler, the  EQU must be located anywhere
+                  after column one.  A label defined with an  EQU cannot
+                  be redefined later in the program.
+
+label   DEFL    <expr>
+                  This assigns the value of the <expr> to the label like
+                  the EQU pseudo-op but a  label defined with a DEFL can
+                  be redefined later in the program.
+
+*INCLUDE <filename>
+                  This pseudo-op causes the assembler to stop assembling
+                  lines in the file it  is  presently in and read in the
+                  file <filename>.  It then begins  assembling  lines in
+                  this included  file  until  it  reaches the end of the
+                  file after which it  returns  to the original file and
+                  resumes assembling lines in it, once more.  The <file-
+                  name> can  be any CP/M filename.ext, but if the extent
+                  is left off it  looks  for  the given filename with an
+                  extent of .LIB.  The asterisk must appear in  column 1
+                  with the  word  INCLUDE  immediately following with no
+                  embedded spaces.
+
+                  *INCLUDE      DRIVER.AZM       will begin  assembly on
+                  ;                              the file DRIVER.AZM
+                  *INCLUDE      Z80MACRO         will begin  assembly on
+                  ;                              the  file  Z80MACRO.LIB
+
+
+Conditional Assembly Pseudo-Ops
+-------------------------------
+
+IF      <expr>
+ELSE
+ENDIF
+        Conditional assembly is a way of  writing a single program so it
+        can be assembled different ways, or  with  different  options by
+        only changing  a  couple  of lines of codes.  When the assembler
+        encounters an IF pseudo-op,  it evaluates the symbol <expr>.  IF
+        <expr> is non-zero, it assembles the  following  lines  until it
+        reaches an  ELSE or an ENDIF.  If <expr> is 0, the lines are ig-
+        nored until the assembler encounters an ELSE or an ENDIF. If the
+        ERLSE is encountered, the  assembler begins assembling the lines
+        again.  The ENDIF pseudo-op causes the assembler  to  resume as-
+        sembling all lines.  You cannot have an IF without an ENDIF.
+
+        Any of these pseudo-ops must appear after column one:
+
+YES     EQU     0FFH
+NO      EQU     0
+KPRO2   EQU     YES
+KPRO10  EQU     NO
+
+         IF     KPRO2
+BITPRT  EQU     1CH
+         ENDIF          KPRO2
+;
+         IF     NOT.KPRO2
+BITPRT  EQU     14H
+         ENDIF          NOT.KPRO2
+
+
+Operators
+---------
+Operators allow the programmer to  make  the assembler do arithmetic and
+logical operations.  They are normally used  to  manipulate  operands or
+generate symbols.  Some of them are used to create tests for conditional
+assembly.  There should be no embedded spaces when using these operators
+as the  first blank encountered terminates the operand field.  The oper-
+ands may be symbols or numbers  in any of the bases.  The operators sup-
+ported by this assembler are:
+
+Arithmetic Operators
+
+        +                 arithmetic addition.
+
+        -                 arithmetic subtraction
+
+        *                 arithmetic multiplication
+
+        /                 arithmetic division  (truncating  the  result)
+
+Logical Operators (Bit Manipulation)
+
+        &
+        ( or .AND. )      logical AND operation
+
+        ^
+        ( or .OR. )       logical OR operation
+
+        .XOR.             logical exclusive OR operation
+
+        \
+        ( or .NOT. )      logical inversion
+
+        .SHR.             shift left operand  to  right by right operand
+
+        .SHL.             shift left operand to  left  by  right operand
+
+        .HIGH.            byte value  is  assigned  the  high  byte of a
+                          16 bit value
+
+        .LOW.             byte value is assigned  the  low  byte of a 16
+                          bit value
+
+
+Conditional Assembly Operators ( return TRUE or FALSE to IF )
+
+        =
+        ( or .EQU. )      logical equivalence
+
+        >
+        ( or .GT. )       greater than
+        .UGT.             unsigned greater than
+
+        <
+        ( or .LT. )       less than
+        .ULT.             unsigned less than
+
+
+Listing Options Pseudo-Ops
+--------------------------
+There are a number of listing options.  All of these options only effect
+the .PRN print file.  The options include  some for debugging as well as
+some for the actual format of the file on the page. The .PRN file is the
+basic tool assembly language programmers have for  examining  the output
+of the  assembler.  The pseudo-ops beginning with an asterisk must begin
+in the first column.
+
+*EJECT
+( or EJEC )       The next line  of  the listing should be placed at the
+                  top of the next page.
+
+*HEADING          Place the text ( following  this  command ) on the top
+                  of each page.  Usually used to date the  listing file.
+
+TITLE 'text'      Place  the  text in the quotation marks (either double
+                  or single on the top of each page in the listing file.
+
+SPAC n            Leave n  blank  lines  in  the listing.  Used to leave
+                  white space in the file without  using  a  page break.
+
+*LIST ON
+*LIST OFF         Turn the listing on  or  off.  This is usually used to
+                  omit long comments or certain sections  from  the .PRN
+                  file.
+
+*MACLIST ON
+*MACLIST OFF      Turn the expansion of macros on or off. Seeing how the
+                  macros are being expanded is handy for optimizing code
+                  but can waste paper when that is no longer the area of
+                  interest.
+
+LIST options
+NLIST options     These pseudo-ops allow turning on any of the supported
+                  listing file options on  (LIST) or off (NLIST) without
+                  changing the other options.  Both of  these pseudo-ops
+                  must be followed with one or more of the following op-
+                  tion letters.  If  these  pseudo-ops is used, some op-
+                  tions are on by default,  marked with (on) in the fol-
+                  lowing list.
+
+                  A       List all bytes in DB, DW, DDB, etc.  Otherwise
+                          only the bytes that  can  fit  in one line are
+                          included in the listing (others  are implied).
+                  B       Place symbol table into object file.
+                  G       Place system generated symbols into object files
+                  I (on)  List  lines  of  conditional  code following a
+                          false conditional.  If off only  the  code ac-
+                          tually assembled is listed.
+                  M (on)  Expand macros in listing files
+                  O (on)  Produce an object module, show the bytes being
+                          being generated  by  the assembler.  Otherwise
+                          just the source and (optionally)  macro expan-
+                          sions.
+                  R       use absolute  displacement  for  JR  and  DJNZ
+                  S (on)  List source code in listing file
+                  T (on)  List symbol table in listing file
+                  X       Generate and list  cross references in listing
+                          file
+                  Z       Generate an error for Z80 only opcodes. Allows
+                          you to write in Z80 mnemonics for an 8080 pro-
+                          cessor.
+
+
+                            Error Reporting
+                            ---------------
+
+When the assembler is unable  to  understand what you are instructing it
+to do, it generates an error message.  These are  almost  always  due to
+typo's or  bad  form.  It displays the error code below and the line the
+error was found on, to the console  and also displays the error codes in
+the listing file.
+
+        D         Duplicate symbol definition.  You  will see this error
+                  message if you do any of the following:
+
+                        Use the same symbol twice:
+
+                                FORMATX
+                                FORMATC
+
+                                will generate an error (only 6
+                                significant characters).
+
+        U       Upper and lower case symbols with the same letters
+
+                                FORMAT:
+                                format:
+
+                                are identical to the assembler.
+
+                        Assigning a different value to a symbol that was
+                        previously defined with a EQU pseudo-op.  If you
+                        are going to reassign, use DEFL.
+
+        E         Relocation error.  This occurs if the assembler cannot
+                  reassign an address as expected.
+
+        F         Format Error.  Indicatesa problem  with  field user or
+                  macro format.
+
+        K         Keyword error.  This means you tried to use one of the
+                  assembler's reserved words or  pseudo-ops as a symbol.
+
+                        ORG     JP      END
+                                NOP
+
+                        END     JP      ORG
+
+                        is in very bad taste.
+
+        L         Label error.  The attempt to assign a value to a label
+                  was unsuccessful.  Also remember that labels don't end
+                  in a colon  when preceding  EQU.  This is  moot if you
+                  get in the habit of not addins colons after ANY label.
+
+                        START:  EQU     100H    is bad news
+                        START   EQU     100H    is perfect
+
+        M         Missing label.  The symbol you are using was never de-
+                  fined.
+
+        N         Macro nesting error.  Macros can  be nested (that is a
+                  macro can call another macro) but if the  nesting gets
+                  too deep,  the assembler will quit and give you one of
+                  these errors.  You can only call macros that were pre-
+                  viously defined.
+
+        O         Op code error.  If you see  this, look in the instruc-
+                  tion and operand fields.  Consult the  mnemonic table.
+                  People switching  over from 8080 will likely see a few
+                  of these.
+
+        P         Phase error.  A 2-pass assembler builds a symbol table
+                  on the first pass and generates the object code on the
+                  second.  If a number that  it  calculates for a symbol
+                  on the first pass does not agree with a number it gen-
+                  erates in the second pass, this error is shown.  Check
+                  the symbols in the line whee the error appeared.
+
+        Q         Questionable operand.  Actually  there's  no  question
+                  about it,  it is a bad operand . Typo's give you these
+                  as well as  blowing  op  code format.  Usually easy to
+                  find your mistake.
+
+        S         Syntax error.  You broke one  of  the syntax rules de-
+                  scribed above.
+
+        T         Symbol table full.  Not much you  can do with this ex-
+                  cept pare down the code.
+
+        U         Undefined symbol.  You used a  symbol but perhaps for-
+                  got to define it in with an EQU.
+
+        V         Value error.  Usually means you are trying to do a 16-
+                  bit operation with an  8-bit  number, or the other way
+                  around.
+
+
+                                 Macros
+                                 ------
+ 
+The macro is a  powerful  method  of writing assembly language programs.
+It makes it possible to write assembly language programs in  a  way that
+resembles higher  level  languages.  In  fact  by  creating a library of
+macros you are in essence creating  your own language, and your own com-
+piler.
+
+Often times in assembly  language  (particularly  writing for CP/M) each
+program contains source lines that are used  again  and  again  in other
+programs.  By using macros the routines only need to be written once and
+then may be called in any program.  The best thing about a macro library
+is that  only  the macros that are called produce object code.  So there
+is no penalty in having a macro  library that is large and complete even
+if you are only going to call one macro.
+
+Macros have a form that is unique  and must be followed closely for cor-
+rect results.  The general form of a macro is
+
+name    MACRO   #parameter1,#parameter2,....
+        instruction
+        instruction
+        instruction
+        .
+        .
+        .
+        ENDM
+
+The name is the symbol that will  be used to invoke the macro.  MACRO is
+a keyword that will indicate to the assembler that a macro is  being de-
+fined.  The parameters  always  must begin with a '#' sign in macros and
+they are seperated by commas.  The  instruction can be Z80 instructions,
+or any of the assembler  commands  listed  above  incuding conditionals.
+The instruction  can  also  be another macro call (called nested macros)
+but only if the nested macro has been already defined.  The ENDM keyword
+tells the assembler that it has reached the end of the code that must be
+assembled when this macro is called. Do not use a colon behind the macro
+name.
+
+The previous message program example can  be rewritten to look like this
+with macros.
+
+          ORG   100H
+
+*INCLUDE Z80MACRO
+
+        BDOS    PRNSTR,MES
+        RET
+
+MES:    DEFB    '*Your message here*'
+        DDB     CRLF
+        DEFB    '*Or here*'
+        END
+
+With the following macro library called Z80MACRO.LIB
+
+
+  Call Bdos function #FUNCT using paramater contained in #DE
+
+ESC     EQU     1BH             ASCII escape
+CRLF    EQU     0D0AH           ASCII   carriage return line feed
+PRNSTR  EQU     9
+
+BDOS    MACRO   #FUNCT,#DE
+        LD      C,#FUNCT        Function number goes to C
+        LD      DE,#DE          Get parameter
+        CALL    5               Call BDOS
+        ENDM
+
+We could also  rewrite  the  cursor  positioning  sequence into a macro.
+Note how just this small example can save us  time  in  future programs.
+Also, the macro library is a great place to keep frequently used symbols
+like ESC and CRLF.
+
+But what about using address symbols in macros? How can we avoid the 'D'
+error if we call the macro  more than once.  The other keyword unique to
+macros is LOCAL.  This makes the assembler generate its own unique label
+every time the macro is expanded in a program.  Following the word LOCAL
+(which must be on the second line of the macro) are the symbols  we want
+the compiler  to generate unique labels for.  These symbols must also be
+preceeded with a '#' sign.
+
+AJUMP    MACRO
+        LOCAL   #ADRZ,#BACK
+        OR      A
+        JR      Z,#ADRZ
+        LD      A,40H
+        JR      #BACK
+
+#ADRZ:  LD      A,04H
+
+#BACK:  LD      DE,0
+         ENDM
+
+The macro itself is not really  useful  but  it is correct and shows the
+use of local labels.
+
+---------------------------------- end ---------------------------------
+

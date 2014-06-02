@@ -1,0 +1,199 @@
+; CROSSTALK "Script" file to log onto the Source via Telenet
+
+; NOTE: This script is provided as a working example of a CROSSTALK script
+;       file for logging on to the SOURCE via TELENET.  You will need to 
+;       set your "id" string and password where indicated below.  
+
+; MICROSTUF, INC.  assumes no responsibility and makes no warranties
+;	for the accuracy or use of this script file.  
+
+magic on
+reply |
+wait  delay 5
+reply |
+wait string "TERMINAL="
+reply D1|
+wait character '@'
+
+; connect to the node for the SOURCE
+reply C 30147|
+wait  character ">"
+
+; You will need to replace this dummy string with your ID and PASSWORD
+reply id abc123 password|
+wait string "->"
+ask You are now logged in.  Do you wish to invoke the SRC menu?
+if -y abort
+
+; This rest of this script is designed to make using the source very easy
+
+; make sure we are at the terminal screen, kill any waiting prompts
+magic on
+screen terminal
+
+label MAIN_MENU
+
+clear
+
+message
+
+
+To use any of the following SOURCE services, simply press the corresponding
+letter of your desired selection.
+
+               SERVICE (action)               Press:
+               ----------------               ------
+
+                Check CP/M posts                C
+                Check IBM posts                 I
+                Leave this script               L
+                Check stock quotes              Q
+                Get the latest in SPORTS        S
+                Exit the Source                 X
+
+
+.
+
+label WRONG
+Ask Enter your choice:
+
+if lqicsx skip ACT_@
+jump WRONG
+
+; Here, we will just do an abort to get out of the script file.
+
+label ACT_L
+; Send an extra return so user will see the source's "->" prompt
+reply |
+; and now, abort this script
+abort
+
+
+; ************   GET STOCKS   ************************************
+
+label act_Q
+
+; tell the source that we want the stockcheck feature
+reply stockcheck|
+
+; wait for ending prompt
+wait string "<H>ELP:"
+
+reply 1|
+wait string "previous menu"
+
+; now, turn capture on, using automatic append option 
+capture STKQUOTE /A
+
+; here, you will add "reply"s with the symbol you want a quote of.  
+; Examples follow which can be modified to check the quotes you want.
+
+; get IBM (Note that we already got the "previous menu" prompt
+reply ibm|
+
+; Wait for prompt again and then get COMPAQ's
+wait string "previous menu"
+reply cmpq|
+
+; Wait for prompt again and then get Home Depots
+wait string "previous menu"
+reply homd|
+
+; Wait for prompt again and then get LOTUS'
+wait string "previous menu"
+reply lots|
+
+; Note - use the same sequence as above for your stocks, or read the
+; Sources help on the stockcheck for easier ways.
+
+; now, wait for prompt again, then turn capture off, back to ->
+wait string "previous menu"
+capture off
+re |
+wait string "<H>ELP:"
+re q|
+
+wait string "->"
+ask Your stock's have been saved in STKQUOTE.  Press Enter to return to menu:
+jump MAIN_MENU
+
+; ****************  DO THE <<POST>> stuff  ************************
+
+label act_I
+label act_C
+message
+
+       When you are finished using POST, simply type a "q" at the 
+
+              "<N>ext, <PO>st, or Return for text-"
+
+          prompt and you will be returned to this menu.
+
+.
+
+skip PO_@
+
+; post read IBM:
+
+label po_I
+reply post read ibm|
+skip PO_X
+
+; post read CP/M:
+
+label po_C
+reply post read cp/m|
+skip PO_X
+
+; here, set the rest of the post conditions:
+label PO_X
+wait string "all :"
+reply |
+
+; what we do is wait for the user to type the q @ the text- prompt using
+; the when condition.  The result is a do, w/ no args.  
+; note that the line after the when condition is a wait manual, which
+; suspends this file.  When the WHEN occurs, it issues the DO, which
+; picks up at the following RWIND
+
+when "text-q" do
+wait manual
+reply |
+wait string "->"
+jump MAIN_MENU
+
+; ******  here, we do the sports stuff, using the when as above *******
+
+label act_S
+message
+
+     To end the SPORTS section of the SOURCE, type the letter q at the
+
+                    "Enter item number or Help"
+
+         prompt and you will be returned to the main menu.
+
+.
+
+reply sports|
+when "Help q" do
+wait manual
+reply |
+wait string "->"
+jump MAIN_MENU
+
+
+; **************   EXIT THE SOURCE   *************************
+
+
+label act_X
+ask Are you sure?
+if -y jump WRONG
+re off|
+
+wait string "disconnected from"
+wa d 20
+sc s
+by
+lo -
+

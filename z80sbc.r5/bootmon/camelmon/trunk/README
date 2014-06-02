@@ -1,0 +1,4 @@
+"z80mr camelmon" to assemble.  No need to load, since the hex file goes
+straight into the EPROM/FLASH chip.  I use a 27C010, with A16 grounded.
+No support for re-writing flash in-circuit.  The final design would
+support this, but the current version was just a test board.  

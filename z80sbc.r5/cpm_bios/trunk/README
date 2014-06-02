@@ -1,0 +1,5 @@
+This is the stock BDOS and CCP from the simh Altair disk image.  My BIOS is
+called JCWBIOS.MAC, and doing a 'DO BUILD' will build it.  It does not write
+to the disk, just builds the CPMBOOT.COM file.  This gets written to the CF
+starting at LBA sector 0.  The DPB for the CF reserves the first 16K of each
+logical disk for boot code.

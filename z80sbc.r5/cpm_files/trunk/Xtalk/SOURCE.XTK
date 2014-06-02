@@ -1,0 +1,46 @@
+NAme     Source
+NUmber   9 5230834
+ACcept   Everything
+ANswback On 
+ATten    ^A
+BReak    ^B
+SWitch   ^[
+KEy      ^L
+CWait    None
+LWait    None
+DEbug    Off
+DPrefix  "ATDT"
+DSuffix  "|"
+RDials   10
+FIlter   -------++++--+-------------------
+INfilter Off
+LFauto   Off
+MOde     Call  
+PWord    
+TUrnarnd ^M
+BKsize   1
+CApture  Off
+COmmand  ^C
+DAta     8
+DUplex   Full
+OUtflter Off
+PArity   None
+PRinter  Off
+SPeed    1200
+STop     1
+TAbex    Off
+BLankex  Off
+UConly   Off
+TStatus  On 
+FK 0 ""
+FK 1 ""
+FK 2 ""
+FK 3 ""
+FK 4 "CROSSTALK 3.0 S "
+FK 5 ""
+FK 6 ""
+FK 7 ""
+FK 8 ""
+FK 9 ""
+GO Q30/45
+tus  

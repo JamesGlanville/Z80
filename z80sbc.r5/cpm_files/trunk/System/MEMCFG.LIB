@@ -1,0 +1,3 @@
+msize	equ	64		; adjust per installed system memory
+bioslen	equ	0d00h		; adjust as bios changes are made (if necessary)
+nhdisks	equ	2		; total number of hard disks (set to 0 if no hard disks desired)

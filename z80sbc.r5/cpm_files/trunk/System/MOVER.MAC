@@ -1,0 +1,37 @@
+	.Z80
+	aseg
+
+	maclib	MEMCFG.LIB	; define msize and bioslen
+
+ccplen	equ	0800h		; cp/m constant
+bdoslen	equ	0e00h		; cp/m constant
+
+; decimal representation of cp/m image size (rounded up to next 1k boundary)
+cpmlen	equ	(ccplen + bdoslen + bioslen + 03ffh) / 0400h
+
+ccp	equ	(msize - cpmlen) * 1024		; ccp start address
+bdos	equ	ccp + ccplen + 6		; bdos start address
+bios	equ	ccp + ccplen + bdoslen		; bios start address
+
+cpmsiz	equ	ccplen + bdoslen + bioslen
+cpmsrc	equ	00A00h
+
+	org	100h
+
+	ld	hl,cpmsrc
+	ld	de,ccp
+	ld	bc,cpmsiz
+again:	ld	a,(hl)
+	ld	(de),a
+	inc	hl
+	inc	de
+	dec	bc
+	ld	a,c
+	or	b
+	jp	nz,again
+	jp	bios
+
+movend	equ	$
+	ds	0200h-movend		; fill remainder with zeroes
+
+	end

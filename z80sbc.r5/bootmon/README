@@ -1,0 +1,11 @@
+'camelmon' is the Camel Forth source, intended to be assembled under CP/M
+(either SIMH or a running Z80 SBC).  This contains the words from the 'forth'
+directory compiled directly into Camel Forth.  The .HEX file that is produced
+after assembly is suitable to be directly burned into the EPROM.  Use using 'W'
+under SIMH or Xmodem under QTERM to send the .HEX file back to the
+Linux/Windows box where the EPROM burner is attached.
+
+'forth' is the original Forth text I downloaded using ProComm into Camel Forth
+on a running SBC board.  Camel Forth was modified just enough to support the
+SIO/2 chip.  I'd edit the 'forth.txt' file on a Windows box and download it
+to the Z80 SBC using an ASCII text transfer with pacing.

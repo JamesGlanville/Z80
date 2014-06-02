@@ -1,0 +1,43 @@
+; Create a bootable image on disk A:
+; required sources are MOVER.MAC, CCP.MAC, BDOS.MAC, CBIOSX.MAC
+; required programs: M80.COM, L80.COM, DDT.COM, BOOT.COM, BOOTGEN.COM
+XSUB
+; create MOVER.COM
+M80 =MOVER/M
+L80 MOVER,MOVER/N/E
+ERA MOVER.REL
+; create CCP.COM
+M80 =CCP/M
+L80 CCP,CCP/N/E
+ERA CCP.REL
+; create BDOS.COM
+M80 =BDOS/M
+L80 BDOS,BDOS/N/E
+ERA BDOS.REL
+; create JCWBIOS.COM
+M80 =JCWBIOS/M
+L80 JCWBIOS,JCWBIOS/N/E
+ERA JCWBIOS.REL
+; put pieces together
+DDT
+F100 5C00 0
+IMOVER.COM
+R0000
+ICCP.COM
+R0900
+IBDOS.COM
+R1100
+IJCWBIOS.COM
+R1F00
+G0
+; create boot file
+SAVE 44 CPMBOOT.COM
+; now perform a cold boot to get rid of XSUB
+; this restores the original BIOS jump vector which is required by BOOTGEN
+BOOT
+; write boot file to reserved tracks
+;BOOTGEN CPMBOOT.COM A:
+ERA MOVER.COM
+ERA CCP.COM
+ERA BDOS.COM
+ERA JCWBIOS.COM
